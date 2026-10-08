@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Image } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
 import { StatusBadge } from './StatusBadge';
 import { ChevronRight, Gauge, Fuel } from 'lucide-react-native';
@@ -31,21 +31,17 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({ vehicle, onPress }) =>
             <View style={styles.plateTag}>
               <Text style={styles.plateText}>{vehicle.plateNumber}</Text>
             </View>
+            {vehicle.fleetNumber ? (
+              <View style={styles.fleetTag}>
+                <Text style={styles.fleetText}>{vehicle.fleetNumber}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
         <View style={styles.arrowContainer}>
           <ChevronRight size={18} color={COLORS.textSecondary} strokeWidth={2.5} />
         </View>
-      </View>
-
-      {/* CAR IMAGE CONTAINER */}
-      <View style={styles.imageContainer}>
-        <Image
-          source={{ uri: vehicle.imageUrl }}
-          style={styles.carImage}
-          resizeMode="cover"
-        />
       </View>
 
       {/* SPECS QUICK FOOTER */}
@@ -126,6 +122,20 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     fontFamily: 'monospace',
   },
+  fleetTag: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  fleetText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1D4ED8',
+    letterSpacing: 0.5,
+  },
   arrowContainer: {
     width: 34,
     height: 34,
@@ -136,18 +146,6 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-  },
-  imageContainer: {
-    width: '100%',
-    height: 146,
-    borderRadius: RADIUS.lg,
-    overflow: 'hidden',
-    backgroundColor: '#F1F5F9',
-    marginBottom: 12,
-  },
-  carImage: {
-    width: '100%',
-    height: '100%',
   },
   specsRow: {
     flexDirection: 'row',

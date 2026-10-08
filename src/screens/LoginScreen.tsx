@@ -56,12 +56,13 @@ export const LoginScreen: React.FC = () => {
     try {
       await requestOtp(cleanEmail);
       showToast(`Verification code sent to ${cleanEmail}`);
+      navigate('OtpVerification');
     } catch (err: any) {
-      // In local testing if backend server is not running yet, show helpful dev message
-      showToast(`Code sent to ${cleanEmail}`);
+      const errMsg = err.message || "Email isn't registered";
+      setError(errMsg);
+      showToast(errMsg);
     } finally {
       setLoading(false);
-      navigate('OtpVerification');
     }
   };
 
@@ -123,7 +124,7 @@ export const LoginScreen: React.FC = () => {
           <View style={styles.titleSection}>
             <Text style={styles.welcomeHeading}>Sign In with Email</Text>
             <Text style={styles.welcomeSubtitle}>
-              Enter your email ID to receive a 4-digit verification code
+              Enter your email ID to receive a 6-digit verification code
             </Text>
           </View>
 

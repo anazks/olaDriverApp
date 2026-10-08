@@ -6,69 +6,35 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
 import { AppHeader } from '../components/AppHeader';
-import { PaymentMethodCard } from '../components/PaymentMethodCard';
 import { InputField } from '../components/InputField';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { SuccessModal } from '../components/SuccessModal';
 import { useApp } from '../context/AppContext';
-import { Lock, CreditCard, User, Calendar, ShieldCheck } from 'lucide-react-native';
+import { Phone, CheckCircle2, ShieldCheck, Smartphone } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const MakePaymentScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const { financial, processPayment, goBack, navigate } = useApp();
+  const { financial, processPayment, goBack, activeProfile, driver } = useApp();
 
-  const [selectedMethod, setSelectedMethod] = useState<'card' | 'paypal'>('card');
-  const [cardNumber, setCardNumber] = useState('4242 4242 4242 4242');
-  const [cardHolder, setCardHolder] = useState('Carlos Mendoza');
-  const [expiry, setExpiry] = useState('12/28');
-  const [cvv, setCvv] = useState('123');
+  const [yappyPhone, setYappyPhone] = useState(
+    activeProfile?.phone || driver?.phone || '+507 6234-5678'
+  );
   const [loading, setLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [error, setError] = useState<string>('');
 
-  const formatCardNumber = (text: string) => {
-    const cleaned = text.replace(/\D/g, '').slice(0, 16);
-    const parts = cleaned.match(/[\s\S]{1,4}/g) || [];
-    return parts.join(' ');
-  };
-
-  const formatExpiry = (text: string) => {
-    const cleaned = text.replace(/\D/g, '').slice(0, 4);
-    if (cleaned.length >= 3) {
-      return `${cleaned.slice(0, 2)}/${cleaned.slice(2)}`;
-    }
-    return cleaned;
-  };
-
-  const handlePay = async () => {
-    const newErrors: { [key: string]: string } = {};
-
-    if (selectedMethod === 'card') {
-      const plainCard = cardNumber.replace(/\s/g, '');
-      if (plainCard.length < 16) {
-        newErrors.cardNumber = 'Enter a valid 16-digit card number';
-      }
-      if (!cardHolder.trim()) {
-        newErrors.cardHolder = 'Cardholder name is required';
-      }
-      if (expiry.length < 5) {
-        newErrors.expiry = 'MM/YY required';
-      }
-      if (cvv.length < 3) {
-        newErrors.cvv = '3-digit CVV';
-      }
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+  const handlePayWithYappy = async () => {
+    if (!yappyPhone.trim() || yappyPhone.length < 7) {
+      setError('Please enter a valid mobile phone number for Yappy.');
       return;
     }
 
-    setErrors({});
+    setError('');
     setLoading(true);
 
     try {
@@ -93,115 +59,107 @@ export const MakePaymentScreen: React.FC = () => {
           contentContainerStyle={styles.scrollContent}
         >
           {/* AMOUNT HEADER */}
-          <View style={styles.amountSection}>
-            <Text style={styles.amountLabel}>Total Due</Text>
+          <View style={[styles.amountSection, SHADOWS.subtle]}>
+            <Text style={styles.amountLabel}>Pending Balance Amount</Text>
             <Text style={styles.amountText}>
-              ${financial.currentDue.toFixed(2)}
+              ${financial.currentDue.toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </Text>
-            <Text style={styles.dueDateText}>Due on {financial.paymentDueDate}</Text>
+            <Text style={styles.dueDateText}>
+              Due on {financial.paymentDueDate || 'Friday'}
+            </Text>
           </View>
 
-          {/* METHOD SELECTION */}
-          <Text style={styles.sectionTitle}>Select Payment Method</Text>
-
-          <PaymentMethodCard
-            type="card"
-            last4="4242"
-            selectable
-            selected={selectedMethod === 'card'}
-            showChevron={false}
-            onPress={() => setSelectedMethod('card')}
-          />
-
-          <PaymentMethodCard
-            type="paypal"
-            email="carlos@example.com"
-            selectable
-            selected={selectedMethod === 'paypal'}
-            showChevron={false}
-            onPress={() => setSelectedMethod('paypal')}
-          />
-
-          {/* CARD FORM */}
-          {selectedMethod === 'card' && (
-            <View style={[styles.cardForm, SHADOWS.subtle]}>
-              <InputField
-                label="Card Number"
-                placeholder="4242 4242 4242 4242"
-                value={cardNumber}
-                onChangeText={(t) => {
-                  setCardNumber(formatCardNumber(t));
-                  if (errors.cardNumber) setErrors((prev) => ({ ...prev, cardNumber: '' }));
-                }}
-                leftIcon={<CreditCard size={18} color={COLORS.textSecondary} />}
-                keyboardType="numeric"
-                maxLength={19}
-                rightIcon={<Text style={styles.visaBadge}>VISA</Text>}
-                error={errors.cardNumber}
-              />
-
-              <InputField
-                label="Cardholder Name"
-                placeholder="Carlos Mendoza"
-                value={cardHolder}
-                onChangeText={(t) => {
-                  setCardHolder(t);
-                  if (errors.cardHolder) setErrors((prev) => ({ ...prev, cardHolder: '' }));
-                }}
-                leftIcon={<User size={18} color={COLORS.textSecondary} />}
-                error={errors.cardHolder}
-              />
-
-              <View style={styles.row}>
-                <View style={{ flex: 1 }}>
-                  <InputField
-                    label="Expiry Date"
-                    placeholder="MM / YY"
-                    value={expiry}
-                    onChangeText={(t) => {
-                      setExpiry(formatExpiry(t));
-                      if (errors.expiry) setErrors((prev) => ({ ...prev, expiry: '' }));
-                    }}
-                    leftIcon={<Calendar size={18} color={COLORS.textSecondary} />}
-                    keyboardType="numeric"
-                    maxLength={5}
-                    error={errors.expiry}
-                  />
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <InputField
-                    label="CVV"
-                    placeholder="123"
-                    value={cvv}
-                    onChangeText={(t) => {
-                      setCvv(t.replace(/\D/g, '').slice(0, 4));
-                      if (errors.cvv) setErrors((prev) => ({ ...prev, cvv: '' }));
-                    }}
-                    leftIcon={<ShieldCheck size={18} color={COLORS.textSecondary} />}
-                    keyboardType="numeric"
-                    maxLength={4}
-                    isPassword
-                    error={errors.cvv}
-                  />
-                </View>
+          {/* YAPPY BRAND HERO CARD */}
+          <View style={[styles.yappyHeroCard, SHADOWS.subtle]}>
+            <View style={styles.yappyBrandRow}>
+              <View style={styles.yappyLogoBox}>
+                <Text style={styles.yappyLogoText}>Y</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.yappyBrandTitle}>Yappy Instant Mobile Pay</Text>
+                <Text style={styles.yappyBrandSub}>Banco General · Panama</Text>
+              </View>
+              <View style={styles.verifiedBadge}>
+                <CheckCircle2 size={12} color="#059669" />
+                <Text style={styles.verifiedBadgeText}>Official</Text>
               </View>
             </View>
-          )}
 
-          {/* PAY BUTTON */}
+            <View style={styles.merchantDivider} />
+
+            <View style={styles.merchantRow}>
+              <Text style={styles.merchantLabel}>Merchant Directory</Text>
+              <Text style={styles.merchantTag}>@OlaCarsPanama</Text>
+            </View>
+            <View style={styles.merchantRow}>
+              <Text style={styles.merchantLabel}>Customer Profile</Text>
+              <Text style={styles.merchantValue}>
+                {activeProfile?.name || driver.name}
+              </Text>
+            </View>
+            <View style={styles.merchantRow}>
+              <Text style={styles.merchantLabel}>Vehicle Assigned</Text>
+              <Text style={styles.merchantValue}>
+                {activeProfile?.vehicle?.plateNumber || 'EI2430'}
+              </Text>
+            </View>
+          </View>
+
+          {/* YAPPY PHONE INPUT */}
+          <View style={[styles.phoneCard, SHADOWS.subtle]}>
+            <Text style={styles.sectionTitle}>Confirm Yappy Mobile Number</Text>
+            <Text style={styles.sectionSubtitle}>
+              Ensure your mobile number is registered with your Banco General Yappy account.
+            </Text>
+
+            <InputField
+              label="Yappy Mobile Phone"
+              placeholder="+507 6000-0000"
+              value={yappyPhone}
+              onChangeText={(t) => {
+                setYappyPhone(t);
+                if (error) setError('');
+              }}
+              leftIcon={<Smartphone size={18} color="#0284C7" />}
+              keyboardType="phone-pad"
+              error={error}
+            />
+
+            <View style={styles.stepsBox}>
+              <Text style={styles.stepsTitle}>How Yappy Payment Works:</Text>
+              <Text style={styles.stepText}>
+                1. Tap <Text style={styles.boldText}>&apos;Pay with Yappy&apos;</Text> below.
+              </Text>
+              <Text style={styles.stepText}>
+                2. You will receive an instant approval push in your Banco General / Yappy App.
+              </Text>
+              <Text style={styles.stepText}>
+                3. Your pending vehicle balance is credited immediately on approval.
+              </Text>
+            </View>
+          </View>
+
+          {/* YAPPY PAY ACTION BUTTON */}
           <PrimaryButton
-            title={`Pay $${financial.currentDue.toFixed(2)}`}
-            onPress={handlePay}
+            title={
+              financial.currentDue > 0
+                ? `Pay with Yappy · $${financial.currentDue.toFixed(2)}`
+                : 'No Pending Balance Due'
+            }
+            onPress={handlePayWithYappy}
             loading={loading}
+            disabled={financial.currentDue <= 0}
             style={styles.payBtn}
           />
 
-          {/* SECURE STRIPE BADGE */}
+          {/* SECURE BANCO GENERAL / YAPPY BADGE */}
           <View style={styles.secureBadgeRow}>
-            <Lock size={15} color={COLORS.textSecondary} />
+            <ShieldCheck size={16} color="#059669" />
             <Text style={styles.secureText}>
-              Secure payment powered by <Text style={styles.stripeText}>Stripe</Text>
+              Protected by <Text style={styles.yappyBoldText}>Yappy Banco General</Text> Security Gateway
             </Text>
           </View>
         </ScrollView>
@@ -232,7 +190,7 @@ const styles = StyleSheet.create({
   },
   amountSection: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
     backgroundColor: COLORS.white,
     paddingVertical: 20,
     borderRadius: RADIUS.xl,
@@ -242,10 +200,12 @@ const styles = StyleSheet.create({
   amountLabel: {
     fontSize: 13,
     color: COLORS.textSecondary,
-    fontWeight: '500',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   amountText: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '800',
     color: COLORS.text,
     marginVertical: 4,
@@ -254,47 +214,142 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: COLORS.textSecondary,
   },
-  sectionTitle: {
+  yappyHeroCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.xl,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    marginBottom: 16,
+  },
+  yappyBrandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  yappyLogoBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#0284C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  yappyLogoText: {
+    color: COLORS.white,
+    fontSize: 24,
+    fontWeight: '900',
+    fontStyle: 'italic',
+  },
+  yappyBrandTitle: {
     fontSize: 16,
     fontWeight: '800',
     color: COLORS.text,
-    marginBottom: 12,
   },
-  cardForm: {
+  yappyBrandSub: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+  },
+  verifiedBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  merchantDivider: {
+    height: 1,
+    backgroundColor: COLORS.borderLight,
+    marginVertical: 14,
+  },
+  merchantRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  merchantLabel: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  merchantTag: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0284C7',
+  },
+  merchantValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  phoneCard: {
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.xl,
     padding: 18,
     borderWidth: 1,
     borderColor: COLORS.border,
-    marginTop: 10,
     marginBottom: 20,
   },
-  visaBadge: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#00579F',
-    letterSpacing: 0.5,
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginBottom: 4,
   },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
+  sectionSubtitle: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 16,
+    lineHeight: 16,
+  },
+  stepsBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: RADIUS.lg,
+    padding: 14,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  stepsTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 6,
+  },
+  stepText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 4,
+    lineHeight: 16,
+  },
+  boldText: {
+    fontWeight: '700',
+    color: COLORS.text,
   },
   payBtn: {
-    marginTop: 8,
     marginBottom: 16,
+    backgroundColor: '#0284C7',
   },
   secureBadgeRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
   },
   secureText: {
     fontSize: 12,
     color: COLORS.textSecondary,
   },
-  stripeText: {
+  yappyBoldText: {
     fontWeight: '700',
-    color: COLORS.text,
+    color: '#0284C7',
   },
 });

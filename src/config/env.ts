@@ -5,7 +5,9 @@
 
 export const ENV = {
   API_BASE_URL:
-    process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.29.238:3000/api',
+    process.env.EXPO_PUBLIC_API_BASE_URL ||
+    process.env.REACT_APP_API_URL ||
+    'http://192.168.29.18:3000/api',
   TIMEOUT_MS: 15000,
 };
 

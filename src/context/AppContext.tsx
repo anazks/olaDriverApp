@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import {
   Driver,
+  CustomerProfile,
   Vehicle,
   FinancialData,
   PaymentMethod,
@@ -28,6 +29,7 @@ interface AppContextType {
   vehicle: Vehicle;
   updateVehicle: (updates: Partial<Vehicle>) => void;
   financial: FinancialData;
+  updateFinancial: (updates: Partial<FinancialData>) => void;
   paymentMethods: PaymentMethod[];
   activities: Activity[];
   addActivity: (activity: Omit<Activity, 'id'>) => void;
@@ -35,7 +37,10 @@ interface AppContextType {
   markNotificationAsRead: (id: string) => void;
   unreadNotificationsCount: number;
   isAuthenticated: boolean;
-  login: (email: string) => void;
+  profiles: CustomerProfile[];
+  activeProfile: CustomerProfile | null;
+  switchProfile: (profileId: string) => void;
+  login: (email: string, driverData?: any, availableProfiles?: CustomerProfile[]) => void;
   logout: () => void;
   isDrawerOpen: boolean;
   openDrawer: () => void;
@@ -64,6 +69,44 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [activeBottomTab, setActiveBottomTab] = useState<BottomTabKey>('Home');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [pendingEmail, setPendingEmail] = useState<string>('carlos@example.com');
+  const [profiles, setProfiles] = useState<CustomerProfile[]>([]);
+  const [activeProfile, setActiveProfile] = useState<CustomerProfile | null>(null);
+
+  const applyProfile = (prof: CustomerProfile) => {
+    setActiveProfile(prof);
+    // Update Driver state
+    const parts = (prof.name || 'Driver').split(' ');
+    setDriver((prev) => ({
+      ...prev,
+      name: prof.name || prev.name,
+      firstName: parts[0] || prev.firstName,
+      lastName: parts.slice(1).join(' ') || prev.lastName,
+      email: prof.email || prev.email,
+      phone: prof.phone || prev.phone,
+      driverId: prof.customerId || prev.driverId,
+    }));
+    // Update Vehicle state
+    if (prof.vehicle) {
+      setVehicle((prev) => ({
+        ...prev,
+        ...prof.vehicle,
+      }));
+    }
+    // Update Financial state
+    if (prof.financial) {
+      setFinancial((prev) => ({
+        ...prev,
+        ...prof.financial,
+      }));
+    }
+  };
+
+  const switchProfile = (profileId: string) => {
+    const target = profiles.find((p) => p.id === profileId);
+    if (!target) return;
+    applyProfile(target);
+    showToast(`Switched to ${target.vehicle?.plateNumber || target.name}`);
+  };
 
   const currentScreen = screenStack[screenStack.length - 1];
   const canGoBack = screenStack.length > 1;
@@ -103,6 +146,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setVehicle((prev) => ({ ...prev, ...updates }));
   };
 
+  const updateFinancial = (updates: Partial<FinancialData>) => {
+    setFinancial((prev) => {
+      const next = { ...prev, ...updates };
+      if (activeProfile) {
+        activeProfile.financial = next;
+      }
+      return next;
+    });
+  };
+
   const addActivity = (newAct: Omit<Activity, 'id'>) => {
     const act: Activity = {
       ...newAct,
@@ -119,9 +172,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const unreadNotificationsCount = notifications.filter((n) => n.unread).length;
 
-  const login = (email: string) => {
+  const login = (email: string, driverData?: any, availableProfiles?: CustomerProfile[]) => {
     setIsAuthenticated(true);
-    if (email) {
+    if (availableProfiles && availableProfiles.length > 0) {
+      setProfiles(availableProfiles);
+      const primary = driverData?.id 
+        ? (availableProfiles.find((p) => p.id === driverData.id) || availableProfiles[0])
+        : availableProfiles[0];
+      applyProfile(primary);
+    } else if (driverData) {
+      setDriver((prev) => {
+        const fullName = driverData.name || driverData.personalInfo?.fullName || prev.name;
+        const parts = fullName.split(' ');
+        const firstName = parts[0] || prev.firstName;
+        const lastName = parts.slice(1).join(' ') || prev.lastName;
+        return {
+          ...prev,
+          email: driverData.email || driverData.personalInfo?.email || email,
+          name: fullName,
+          firstName,
+          lastName,
+          phone: driverData.phone || driverData.personalInfo?.phone || prev.phone,
+          driverId: driverData.customerId || driverData.driverCode || String(driverData._id || prev.driverId),
+        };
+      });
+      if (driverData.vehicle) {
+        setVehicle((prev) => ({ ...prev, ...driverData.vehicle }));
+      }
+      if (driverData.financial) {
+        setFinancial((prev) => ({ ...prev, ...driverData.financial }));
+      }
+    } else if (email) {
       setDriver((prev) => ({ ...prev, email }));
     }
     // Navigate straight to dashboard and reset stack
@@ -198,6 +279,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         vehicle,
         updateVehicle,
         financial,
+        updateFinancial,
         paymentMethods,
         activities,
         addActivity,
@@ -205,6 +287,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         markNotificationAsRead,
         unreadNotificationsCount,
         isAuthenticated,
+        profiles,
+        activeProfile,
+        switchProfile,
         login,
         logout,
         isDrawerOpen,

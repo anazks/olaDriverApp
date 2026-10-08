@@ -8,18 +8,26 @@ interface PaymentCardProps {
   totalDue: number;
   dueDate: string;
   onPayNow: () => void;
+  buttonText?: string;
 }
 
 export const PaymentCard: React.FC<PaymentCardProps> = ({
   totalDue,
   dueDate,
   onPayNow,
+  buttonText,
 }) => {
+  const displayButtonTitle =
+    buttonText ||
+    (totalDue > 0
+      ? `Pay $${totalDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Now`
+      : 'Pay Now');
+
   return (
     <View style={[styles.card, SHADOWS.card]}>
       <View style={styles.topRow}>
         <View>
-          <Text style={styles.dueLabel}>Total Due</Text>
+          <Text style={styles.dueLabel}>Pending Balance</Text>
           <Text style={styles.amountText}>
             ${totalDue.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </Text>
@@ -32,7 +40,7 @@ export const PaymentCard: React.FC<PaymentCardProps> = ({
       </View>
 
       <PrimaryButton
-        title="Pay Now"
+        title={displayButtonTitle}
         onPress={onPayNow}
         style={styles.payButton}
       />
