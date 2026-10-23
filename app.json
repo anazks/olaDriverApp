@@ -10,13 +10,13 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.olacars.driverapp",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "package": "com.byteboot.DriverApp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
