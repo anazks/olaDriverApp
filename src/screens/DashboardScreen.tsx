@@ -264,7 +264,7 @@ export const DashboardScreen: React.FC = () => {
                     </View>
                     {isSelected ? (
                       <View style={styles.activeCheckCircle}>
-                        <Check size={16} color="#FFFFFF" strokeWidth={2.5} />
+                        <Check size={16} color="#000000" strokeWidth={2.5} />
                       </View>
                     ) : (
                       <ChevronRight size={18} color={COLORS.textSecondary} />
@@ -560,11 +560,11 @@ const styles = StyleSheet.create({
   vehiclePlateText: {
     fontSize: 10.5,
     fontWeight: '800',
-    color: '#D2EE00',
+    color: 'rgb(200, 230, 0)',
     letterSpacing: 1,
   },
   vehiclePlateTextActive: {
-    color: '#FFFFFF',
+    color: '#000000',
   },
   profileVehicleModel: {
     fontSize: 14.5,

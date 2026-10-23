@@ -82,7 +82,7 @@ export const EditProfileScreen: React.FC = () => {
                 onPress={() => showToast('Choose photo from gallery')}
                 activeOpacity={0.8}
               >
-                <Camera size={16} color={COLORS.white} />
+                <Camera size={16} color="#000000" />
               </TouchableOpacity>
             </View>
             <Text style={styles.changePhotoText}>Change Profile Photo</Text>

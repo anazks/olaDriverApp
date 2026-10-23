@@ -1105,7 +1105,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   supportBtnText: {
-    color: COLORS.white,
+    color: '#000000',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -1199,7 +1199,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   modalDownloadText: {
-    color: COLORS.white,
+    color: '#000000',
     fontSize: 14,
     fontWeight: '700',
   },

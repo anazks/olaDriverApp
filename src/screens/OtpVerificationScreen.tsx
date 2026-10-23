@@ -272,7 +272,7 @@ export const OtpVerificationScreen: React.FC = () => {
             accessibilityRole="button"
           >
             {loading ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <ActivityIndicator color="#000000" size="small" />
             ) : (
               <Text style={styles.verifyButtonText}>Verify & Continue</Text>
             )}
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: COLORS.primary,
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.12,
     shadowRadius: 6,
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
   verifyButtonText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#000000',
     letterSpacing: 0.2,
   },
   resendRow: {

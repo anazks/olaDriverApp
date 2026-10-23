@@ -1,8 +1,9 @@
 import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Image } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { ArrowLeft, Menu, Bell } from 'lucide-react-native';
 import { useApp } from '../context/AppContext';
+import { OlaBannerLogo } from './OlaLogo';
 
 interface AppHeaderProps {
   title?: string;
@@ -72,13 +73,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
       {/* CENTER ELEMENT */}
       <View style={styles.centerContainer}>
         {centerLogo ? (
-          <View style={styles.logoWrapper}>
-            <View style={styles.logoRow}>
-              <Text style={styles.logoOla}>Ola</Text>
-              <Text style={styles.logoCars}>Cars</Text>
-            </View>
-            <Text style={styles.logoSubtag}>DRIVER PORTAL</Text>
-          </View>
+          <OlaBannerLogo width={146} />
         ) : title ? (
           <Text style={styles.titleText} numberOfLines={1}>
             {title}
@@ -147,6 +142,18 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     letterSpacing: -0.3,
   },
+  logoContainer: {
+    backgroundColor: '#000000',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoImage: {
+    width: 142,
+    height: 30,
+  },
   logoWrapper: {
     alignItems: 'center',
   },
@@ -154,17 +161,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  logoPill: {
+    backgroundColor: '#000000',
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 6,
+    marginRight: 4,
+  },
   logoOla: {
-    fontSize: 21,
+    fontSize: 16,
     fontWeight: '900',
-    color: COLORS.primary,
-    letterSpacing: -0.5,
+    color: 'rgb(200, 230, 0)',
+    letterSpacing: -0.4,
   },
   logoCars: {
-    fontSize: 21,
+    fontSize: 18,
     fontWeight: '900',
-    color: COLORS.text,
-    letterSpacing: -0.5,
+    color: '#000000',
+    letterSpacing: -0.4,
   },
   logoSubtag: {
     fontSize: 9,

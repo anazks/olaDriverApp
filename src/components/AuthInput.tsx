@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     paddingRight: 6,
   },
   inputWrapperFocused: {
-    borderColor: '#00A86B',
+    borderColor: '#000000',
     borderWidth: 1.5,
   },
   inputWrapperError: {

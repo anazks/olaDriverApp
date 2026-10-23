@@ -43,6 +43,13 @@ export const PrimaryButton: React.FC<PrimaryButtonProps> = ({
     }
   };
 
+  const getTextColor = () => {
+    if (variant === 'dark' || variant === 'danger') return COLORS.white;
+    return '#000000';
+  };
+
+  const textColor = getTextColor();
+
   return (
     <TouchableOpacity
       activeOpacity={0.8}
@@ -55,11 +62,11 @@ export const PrimaryButton: React.FC<PrimaryButtonProps> = ({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={COLORS.white} size="small" />
+        <ActivityIndicator color={textColor} size="small" />
       ) : (
         <>
           {icon}
-          <Text style={[styles.text, textStyle]}>{title}</Text>
+          <Text style={[styles.text, { color: textColor }, textStyle]}>{title}</Text>
         </>
       )}
     </TouchableOpacity>

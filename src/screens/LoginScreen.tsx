@@ -9,24 +9,27 @@ import {
   Platform,
   StatusBar,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { AuthInput } from '../components/AuthInput';
-import { SocialLoginButton } from '../components/SocialLoginButton';
 import { useApp } from '../context/AppContext';
 import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
-import { ArrowLeft, ArrowRight, Mail, Sparkles, CheckCircle2 } from 'lucide-react-native';
+import { ArrowLeft, ArrowRight, Mail } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { requestOtp } from '../api/authService';
+import { OLA_LOGO_PNG_BASE64 } from '../constants/logoPngData';
+import { OLA_LOGO_BASE64 } from '../constants/logoData';
 
 export const LoginScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const { navigate, goBack, login, setPendingEmail, showToast } = useApp();
+  const { navigate, goBack, setPendingEmail, showToast } = useApp();
 
-  const [email, setEmail] = useState('carlos@example.com');
+  const [email, setEmail] = useState('');
   const [error, setError] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [isBackPressed, setIsBackPressed] = useState(false);
   const [isGoPressed, setIsGoPressed] = useState(false);
+  const [logoError, setLogoError] = useState(false);
 
   const validateEmail = (val: string) => {
     const trimmed = val.trim();
@@ -64,15 +67,6 @@ export const LoginScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSocialAuth = (provider: string) => {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      login('carlos@example.com');
-      showToast(`Logged in via ${provider}`);
-    }, 500);
   };
 
   return (
@@ -113,11 +107,15 @@ export const LoginScreen: React.FC = () => {
         >
           {/* 2. BRAND LOGO SECTION */}
           <View style={styles.logoSection}>
-            <View style={styles.logoRow}>
-              <Text style={styles.logoOla}>Ola</Text>
-              <Text style={styles.logoCars}>Cars</Text>
+            <View style={styles.logoBadgeContainer}>
+              <Image
+                source={logoError ? { uri: OLA_LOGO_BASE64 } : { uri: OLA_LOGO_PNG_BASE64 }}
+                style={styles.logoImage}
+                resizeMode="contain"
+                accessibilityLabel="Arrendadora Ola Cars Logo"
+                onError={() => setLogoError(true)}
+                 />
             </View>
-            <Text style={styles.driverPortalText}>Driver Portal</Text>
           </View>
 
           {/* 3. WELCOME TITLE */}
@@ -138,26 +136,13 @@ export const LoginScreen: React.FC = () => {
                 setEmail(txt);
                 if (error) setError(undefined);
               }}
-              leftIcon={<Mail size={20} color={COLORS.primary} />}
+              leftIcon={<Mail size={20} color="#000000" />}
               keyboardType="email-address"
               autoCapitalize="none"
               accessibilityLabel="Email ID input"
               error={error}
             />
           </View>
-
-          {/* DEMO FAST-FILL BADGE */}
-          <TouchableOpacity
-            style={styles.demoFillBadge}
-            onPress={() => {
-              setEmail('carlos@example.com');
-              if (error) setError(undefined);
-            }}
-            activeOpacity={0.7}
-          >
-            <Sparkles size={13} color={COLORS.primary} />
-            <Text style={styles.demoFillText}>Use Demo: carlos@example.com</Text>
-          </TouchableOpacity>
 
           {/* 5. GO BUTTON */}
           <TouchableOpacity
@@ -175,32 +160,18 @@ export const LoginScreen: React.FC = () => {
             accessibilityRole="button"
           >
             {loading ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
+              <ActivityIndicator color="#000000" size="small" />
             ) : (
               <View style={styles.goButtonContent}>
                 <Text style={styles.goButtonText}>Go</Text>
                 <View style={styles.goArrowCircle}>
-                  <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.6} />
+                  <ArrowRight size={18} color="#000000" strokeWidth={2.6} />
                 </View>
               </View>
             )}
           </TouchableOpacity>
 
-          {/* 6. OR DIVIDER */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* 7. SOCIAL LOGIN BUTTONS */}
-          <SocialLoginButton
-            provider="google"
-            onPress={() => handleSocialAuth('Google')}
-            accessibilityLabel="Continue with Google"
-          />
-
-          {/* 8. BOTTOM SUPPORT TEXT */}
+          {/* 6. BOTTOM SUPPORT TEXT */}
           <View style={styles.supportRow}>
             <Text style={styles.supportPrefix}>Need assistance with your account? </Text>
             <TouchableOpacity
@@ -248,33 +219,25 @@ const styles = StyleSheet.create({
   },
   logoSection: {
     alignItems: 'center',
-    marginTop: 18,
-    marginBottom: 4,
+    marginTop: 6,
+    marginBottom: 8,
   },
-  logoRow: {
-    flexDirection: 'row',
+  logoBadgeContainer: {
+    backgroundColor: '#000000',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 40,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  logoOla: {
-    fontSize: 34,
-    fontWeight: '800',
-    color: '#00A86B',
-    letterSpacing: -0.5,
-  },
-  logoCars: {
-    fontSize: 34,
-    fontWeight: '800',
-    color: '#101820',
-    letterSpacing: -0.5,
-  },
-  driverPortalText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#687386',
-    letterSpacing: 0.8,
-    marginTop: 4,
+  logoImage: {
+    width: 220,
+    height: 48,
   },
   titleSection: {
     alignItems: 'center',
@@ -300,7 +263,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     width: '100%',
-    marginBottom: 10,
+    marginBottom: 24,
   },
   inputLabel: {
     fontSize: 13.5,
@@ -309,23 +272,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginLeft: 2,
   },
-  demoFillBadge: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.primaryLight,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: RADIUS.full,
-    marginBottom: 24,
-    marginLeft: 2,
-  },
-  demoFillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.primaryDark,
-  },
   goButton: {
     width: '100%',
     height: 52,
@@ -333,7 +279,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: COLORS.primary,
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.15,
     shadowRadius: 6,
@@ -354,36 +300,16 @@ const styles = StyleSheet.create({
   goButtonText: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#000000',
     letterSpacing: 0.4,
   },
   goArrowCircle: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: 'rgba(0, 0, 0, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 26,
-    marginBottom: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E5E9ED',
-  },
-  dividerText: {
-    fontSize: 12,
-    color: '#9AA4AF',
-    fontWeight: '600',
-    marginHorizontal: 13,
-  },
-  socialSpacing: {
-    height: 10,
   },
   supportRow: {
     flexDirection: 'row',
@@ -399,7 +325,8 @@ const styles = StyleSheet.create({
   },
   supportLink: {
     fontSize: 12.5,
-    color: '#00A86B',
+    color: '#000000',
     fontWeight: '700',
+    textDecorationLine: 'underline',
   },
 });

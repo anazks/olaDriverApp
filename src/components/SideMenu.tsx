@@ -13,6 +13,7 @@ import { COLORS, RADIUS } from '../constants/theme';
 import { useApp } from '../context/AppContext';
 import { StatusBadge } from './StatusBadge';
 import { ConfirmationModal } from './ConfirmationModal';
+import { OlaBannerLogo } from './OlaLogo';
 import {
   LayoutDashboard,
   User,
@@ -75,10 +76,7 @@ export const SideMenu: React.FC = () => {
           <View style={styles.drawer}>
             {/* DRAWER HEADER */}
             <View style={styles.drawerHeader}>
-              <View style={styles.logoRow}>
-                <Text style={styles.logoOla}>Ola</Text>
-                <Text style={styles.logoCars}>Cars</Text>
-              </View>
+              <OlaBannerLogo width={140} />
 
               <TouchableOpacity
                 onPress={closeDrawer}
@@ -193,19 +191,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 20,
   },
-  logoRow: {
-    flexDirection: 'row',
+  logoContainer: {
+    backgroundColor: '#000000',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  logoOla: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.primary,
-  },
-  logoCars: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: COLORS.text,
+  logoImage: {
+    width: 140,
+    height: 30,
   },
   closeBtn: {
     width: 36,

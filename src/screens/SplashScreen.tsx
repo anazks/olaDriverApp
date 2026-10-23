@@ -10,9 +10,9 @@ import {
   ImageBackground,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { RADIUS } from '../constants/theme';
 import { useApp } from '../context/AppContext';
-import { ArrowRight, ShieldCheck } from 'lucide-react-native';
+import { ArrowRight } from 'lucide-react-native';
+import { OlaBannerLogo } from '../components/OlaLogo';
 
 export const SplashScreen: React.FC = () => {
   const { navigate } = useApp();
@@ -64,16 +64,7 @@ export const SplashScreen: React.FC = () => {
           >
             {/* BRANDING SECTION */}
             <View style={styles.brandingSection}>
-              <View style={styles.officialBadge}>
-                <ShieldCheck size={14} color="#00E599" strokeWidth={2.2} />
-                <Text style={styles.officialBadgeText}>OFFICIAL DRIVER PORTAL</Text>
-              </View>
-
-              <View style={styles.logoRow}>
-                <Text style={styles.logoOla}>Ola</Text>
-                <Text style={styles.logoCars}>Cars</Text>
-              </View>
-              <Text style={styles.portalSub}>PARTNER TERMINAL</Text>
+              <OlaBannerLogo width={260} transparentBg />
             </View>
 
             {/* BOTTOM ACTION BUTTONS */}
@@ -87,7 +78,7 @@ export const SplashScreen: React.FC = () => {
                 accessibilityRole="button"
               >
                 <Text style={styles.getStartedText}>Get Started</Text>
-                <ArrowRight size={18} color="#FFFFFF" strokeWidth={2.4} />
+                <ArrowRight size={18} color="#000000" strokeWidth={2.4} />
               </TouchableOpacity>
 
               {/* CLEAN FROSTED GLASS DRIVER LOGIN BUTTON */}
@@ -131,48 +122,7 @@ const styles = StyleSheet.create({
   },
   brandingSection: {
     alignItems: 'center',
-    marginTop: '25%',
-  },
-  officialBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    backgroundColor: 'rgba(0, 229, 153, 0.1)',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 229, 153, 0.3)',
-    marginBottom: 16,
-  },
-  officialBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#00E599',
-    letterSpacing: 1.2,
-  },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logoOla: {
-    fontSize: 52,
-    fontWeight: '900',
-    color: '#00E599',
-    letterSpacing: -0.5,
-  },
-  logoCars: {
-    fontSize: 52,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
-  },
-  portalSub: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#8E9DAE',
-    letterSpacing: 2.5,
-    marginTop: 4,
+    marginTop: '15%',
   },
   bottomSection: {
     width: '100%',
@@ -181,14 +131,14 @@ const styles = StyleSheet.create({
   getStartedButton: {
     width: '100%',
     height: 54,
-    backgroundColor: '#00A86B',
+    backgroundColor: 'rgb(200, 230, 0)',
     borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
     marginBottom: 12,
-    shadowColor: '#00A86B',
+    shadowColor: 'rgb(200, 230, 0)',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
@@ -197,7 +147,7 @@ const styles = StyleSheet.create({
   getStartedText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#000000',
     letterSpacing: 0.3,
   },
   glassLoginButton: {
