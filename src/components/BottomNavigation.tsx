@@ -1,21 +1,32 @@
 import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Platform } from 'react-native';
 import { COLORS } from '../constants/theme';
-import { Home, CreditCard, Car, Settings } from 'lucide-react-native';
-import { useApp } from '../context/AppContext';
+import { Home, FileText, Car, Settings } from 'lucide-react-native';
+import { useApp, isAccountActive } from '../context/AppContext';
 import { BottomTabKey } from '../types';
 
 export const BottomNavigation: React.FC = () => {
-  const { activeBottomTab, setActiveBottomTab, navigate } = useApp();
+  const { activeBottomTab, setActiveBottomTab, navigate, driver, showToast } = useApp();
+
+  const isUserActive = isAccountActive(driver.status, driver.isActive);
 
   const handleTabPress = (tab: BottomTabKey) => {
+    if (!isUserActive && (tab === 'Statements' || tab === 'Payments' || tab === 'Vehicle')) {
+      showToast(
+        tab === 'Statements' || tab === 'Payments'
+          ? 'Statements are disabled while account is inactive.'
+          : 'Vehicle asset is unassigned while account is inactive.'
+      );
+      return;
+    }
     setActiveBottomTab(tab);
     switch (tab) {
       case 'Home':
         navigate('Dashboard');
         break;
+      case 'Statements':
       case 'Payments':
-        navigate('Payments');
+        navigate('Statements');
         break;
       case 'Vehicle':
         navigate('VehicleStatus');
@@ -28,7 +39,7 @@ export const BottomNavigation: React.FC = () => {
 
   const tabs: { key: BottomTabKey; label: string; icon: typeof Home }[] = [
     { key: 'Home', label: 'Home', icon: Home },
-    { key: 'Payments', label: 'Payments', icon: CreditCard },
+    { key: 'Statements', label: 'Statements', icon: FileText },
     { key: 'Vehicle', label: 'Vehicle', icon: Car },
     { key: 'Settings', label: 'Settings', icon: Settings },
   ];
@@ -36,16 +47,21 @@ export const BottomNavigation: React.FC = () => {
   return (
     <View style={styles.container}>
       {tabs.map((tab) => {
-        const isActive = activeBottomTab === tab.key;
+        const isActive =
+          activeBottomTab === tab.key ||
+          (tab.key === 'Statements' && activeBottomTab === 'Payments');
+        const isDisabled =
+          !isUserActive &&
+          (tab.key === 'Statements' || tab.key === 'Payments' || tab.key === 'Vehicle');
         const IconComponent = tab.icon;
-        const color = isActive ? COLORS.primary : '#94A3B8';
+        const color = isActive ? COLORS.primary : isDisabled ? '#CBD5E1' : '#94A3B8';
 
         return (
           <TouchableOpacity
             key={tab.key}
-            style={styles.tabItem}
+            style={[styles.tabItem, isDisabled && { opacity: 0.4 }]}
             onPress={() => handleTabPress(tab.key)}
-            activeOpacity={0.7}
+            activeOpacity={isDisabled ? 0.9 : 0.7}
           >
             <View style={styles.iconContainer}>
               <IconComponent size={22} color={color} strokeWidth={isActive ? 2.5 : 1.8} />

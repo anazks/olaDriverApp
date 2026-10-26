@@ -31,6 +31,9 @@
         "projectId": "07bf29ff-ca8f-4b0b-85ab-16b19ab6a67c"
       }
     },
-    "owner": "byteboot"
+    "owner": "byteboot",
+    "plugins": [
+      "expo-sharing"
+    ]
   }
 }

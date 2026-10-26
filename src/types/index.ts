@@ -9,6 +9,13 @@ export interface Driver {
   address: string;
   emergencyContact: string;
   avatarUrl: string;
+  status?: 'ACTIVE' | 'INACTIVE' | 'DRAFT' | 'PENDING REVIEW' | 'VERIFICATION' | 'CREDIT CHECK' | 'APPROVED' | 'CONTRACT PENDING' | 'SUSPENDED' | 'REJECTED' | string;
+  isActive?: boolean;
+  branch?: string;
+  branchLocation?: string;
+  currentVehicle?: Vehicle | any;
+  assignedVehicle?: Vehicle | any;
+  raw?: any;
 }
 
 export interface CustomerProfile {
@@ -45,6 +52,8 @@ export interface VehicleInsurance {
 
 export interface Vehicle {
   id?: string;
+  _id?: string;
+  vehicleId?: string;
   make: string;
   model: string;
   variant: string;
@@ -64,10 +73,14 @@ export interface Vehicle {
   status: 'Active' | 'Maintenance' | 'Inactive' | string;
   imageUrl: string;
   branch?: string;
+  weeklyRent?: number;
   gpsActive?: boolean;
   gpsSerial?: string;
   insurance?: VehicleInsurance;
   documents?: VehicleDocument[];
+  basicDetails?: any;
+  legalDocs?: any;
+  raw?: any;
 }
 
 export interface FinancialData {
@@ -121,11 +134,13 @@ export type RootScreen =
   | 'EditProfile'
   | 'VehicleStatus'
   | 'Payments'
+  | 'Statements'
   | 'MakePayment'
   | 'ActivityHistory'
-  | 'Notifications';
+  | 'Notifications'
+  | 'InactiveAccount';
 
-export type BottomTabKey = 'Home' | 'Payments' | 'Vehicle' | 'Settings';
+export type BottomTabKey = 'Home' | 'Statements' | 'Payments' | 'Vehicle' | 'Settings';
 
 export interface StatementTransaction {
   id: string;

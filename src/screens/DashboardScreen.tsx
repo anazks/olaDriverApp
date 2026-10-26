@@ -8,6 +8,7 @@ import {
   Image,
   useWindowDimensions,
   Modal,
+  Linking,
 } from 'react-native';
 import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
 import { AppHeader } from '../components/AppHeader';
@@ -15,7 +16,7 @@ import { QuickActionCard } from '../components/QuickActionCard';
 import { VehicleCard } from '../components/VehicleCard';
 import { ActivityItem } from '../components/ActivityItem';
 import { BottomNavigation } from '../components/BottomNavigation';
-import { useApp } from '../context/AppContext';
+import { useApp, isAccountActive } from '../context/AppContext';
 import {
   CreditCard,
   Car,
@@ -27,6 +28,10 @@ import {
   ChevronRight,
   Check,
   User,
+  AlertTriangle,
+  PhoneCall,
+  MessageSquare,
+  FileText,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -41,9 +46,13 @@ export const DashboardScreen: React.FC = () => {
     navigate, 
     profiles, 
     activeProfile, 
-    switchProfile 
+    switchProfile,
+    refreshProfile,
+    showToast,
   } = useApp();
   const [showSwitchModal, setShowSwitchModal] = useState(false);
+
+  const isUserActive = isAccountActive(driver.status, driver.isActive);
 
   // Responsive card width calculation for 2x2 grid
   const horizontalPadding = 18;
@@ -86,9 +95,26 @@ export const DashboardScreen: React.FC = () => {
                 </TouchableOpacity>
               )}
 
-              <View style={styles.onlineBadge}>
-                <View style={styles.greenPulseDot} />
-                <Text style={styles.onlineBadgeText}>Shift Active</Text>
+              <View
+                style={[
+                  styles.onlineBadge,
+                  !isUserActive && { backgroundColor: '#FEE2E2', borderColor: '#FECACA' },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.greenPulseDot,
+                    !isUserActive && { backgroundColor: '#EF4444' },
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.onlineBadgeText,
+                    !isUserActive && { color: '#B91C1C' },
+                  ]}
+                >
+                  {isUserActive ? 'Shift Active' : 'Account Inactive'}
+                </Text>
               </View>
             </View>
           </View>
@@ -142,6 +168,97 @@ export const DashboardScreen: React.FC = () => {
           )}
         </View>
 
+        {/* EXECUTIVE INACTIVE NOTICE CARD */}
+        {!isUserActive && (
+          <View style={[styles.inactiveCard, SHADOWS.card]}>
+            {/* Top Crimson Accent Strip */}
+            <View style={styles.inactiveAccentStrip} />
+
+            <View style={styles.inactiveCardBody}>
+              {/* Header with Icon, Badge & Title */}
+              <View style={styles.inactiveHeaderRow}>
+                <View style={styles.inactiveIconBadge}>
+                  <AlertTriangle size={20} color="#EF4444" strokeWidth={2.4} />
+                </View>
+                <View style={styles.inactiveHeaderTexts}>
+                  <View style={styles.inactiveStatusPill}>
+                    <View style={styles.inactivePillDot} />
+                    <Text style={styles.inactivePillText}>ACCOUNT INACTIVE</Text>
+                    <Text style={styles.inactivePillSub}>• UNASSIGNED</Text>
+                  </View>
+                  <Text style={styles.inactiveTitle}>Vehicle Asset Not Assigned</Text>
+                </View>
+              </View>
+
+              {/* Informative message */}
+              <Text style={styles.inactiveDescription}>
+                Your driver account is currently inactive. Please contact OLACARS support to verify your credentials and assign your vehicle.
+              </Text>
+
+              {/* Status Pills Row */}
+              <View style={styles.inactiveStatsRow}>
+                <View style={styles.inactiveStatChip}>
+                  <Text style={styles.inactiveStatLabel}>Status:</Text>
+                  <Text style={styles.inactiveStatValRed}>Inactive</Text>
+                </View>
+                <View style={styles.inactiveStatChip}>
+                  <Text style={styles.inactiveStatLabel}>Vehicle:</Text>
+                  <Text style={styles.inactiveStatValGray}>Not Assigned</Text>
+                </View>
+                <View style={styles.inactiveStatChip}>
+                  <Text style={styles.inactiveStatLabel}>Action:</Text>
+                  <Text style={styles.inactiveStatValAmber}>Contact Fleet</Text>
+                </View>
+              </View>
+
+              {/* Action Buttons Row */}
+              <View style={styles.inactiveActionsContainer}>
+                <TouchableOpacity
+                  style={styles.btnCall}
+                  onPress={() => Linking.openURL('tel:+5078339595')}
+                  activeOpacity={0.82}
+                >
+                  <PhoneCall size={14} color="#FFFFFF" strokeWidth={2.2} />
+                  <Text style={styles.btnCallText}>Call OLACARS</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.btnWhatsApp}
+                  onPress={() =>
+                    Linking.openURL(
+                      'https://wa.me/50760001234?text=Hello%20OLACARS,%20my%20account%20is%20inactive%20and%20vehicle%20unassigned.%20Please%20help%20me%20activate.'
+                    )
+                  }
+                  activeOpacity={0.82}
+                >
+                  <MessageSquare size={14} color="#047857" strokeWidth={2.2} />
+                  <Text style={styles.btnWhatsAppText}>WhatsApp</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.btnSync}
+                  onPress={async () => {
+                    try {
+                      const res = await refreshProfile();
+                      if (res) {
+                        showToast('Account status updated');
+                      } else {
+                        showToast('Status checked');
+                      }
+                    } catch (e: any) {
+                      showToast('Failed to check status');
+                    }
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <RefreshCw size={13} color={COLORS.textSecondary} strokeWidth={2.2} />
+                  <Text style={styles.btnSyncText}>Refresh</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+
         {/* QUICK ACTIONS SECTION (PERFECTLY RESPONSIVE 2X2 GRID) */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
@@ -151,27 +268,41 @@ export const DashboardScreen: React.FC = () => {
         <View style={[styles.quickActionGrid, { gap: gridGap }]}>
           <QuickActionCard
             cardWidth={cardWidth}
-            title="Make Payment"
-            subtitle={`$${financial.currentDue.toFixed(2)} Due`}
-            badge="Due soon"
-            icon={<CreditCard size={22} color={COLORS.primary} strokeWidth={2.4} />}
-            iconBgColor="#E6F7F0"
-            onPress={() => navigate('Payments')}
+            title="Statements"
+            subtitle={!isUserActive ? 'Disabled' : 'View Ledger'}
+            badge={!isUserActive ? 'Disabled' : 'Statements'}
+            icon={<FileText size={22} color={isUserActive ? COLORS.primary : '#94A3B8'} strokeWidth={2.4} />}
+            iconBgColor={isUserActive ? '#E6F7F0' : '#F1F5F9'}
+            disabled={!isUserActive}
+            onPress={() => {
+              if (!isUserActive) {
+                showToast('Account is inactive. Statements are disabled.');
+                return;
+              }
+              navigate('Statements');
+            }}
           />
           <QuickActionCard
             cardWidth={cardWidth}
             title="Vehicle Status"
-            subtitle={`${vehicle.make} ${vehicle.model}`}
-            badge="Active"
-            icon={<Car size={22} color={COLORS.purple} strokeWidth={2.4} />}
-            iconBgColor="#F3E8FF"
-            onPress={() => navigate('VehicleStatus')}
+            subtitle={!isUserActive ? 'Unassigned' : `${vehicle.make} ${vehicle.model}`}
+            badge={!isUserActive ? 'Unassigned' : 'Active'}
+            icon={<Car size={22} color={isUserActive ? COLORS.purple : '#94A3B8'} strokeWidth={2.4} />}
+            iconBgColor={isUserActive ? '#F3E8FF' : '#F1F5F9'}
+            disabled={!isUserActive}
+            onPress={() => {
+              if (!isUserActive) {
+                showToast('Vehicle asset is unassigned while account is inactive.');
+                return;
+              }
+              navigate('VehicleStatus');
+            }}
           />
           <QuickActionCard
             cardWidth={cardWidth}
             title="My Profile"
-            subtitle={`ID: ${driver.driverId}`}
-            badge="Verified"
+            subtitle={`ID: ${driver.driverId || 'Driver'}`}
+            badge={isUserActive ? 'Verified' : 'Inactive'}
             icon={<UserCheck size={22} color="#0284C7" strokeWidth={2.4} />}
             iconBgColor="#E0F2FE"
             onPress={() => navigate('Profile')}
@@ -179,30 +310,65 @@ export const DashboardScreen: React.FC = () => {
           <QuickActionCard
             cardWidth={cardWidth}
             title="All Activities"
-            subtitle="History & Logs"
-            icon={<Receipt size={22} color="#D97706" strokeWidth={2.4} />}
-            iconBgColor="#FEF3C7"
-            onPress={() => navigate('ActivityHistory')}
+            subtitle={!isUserActive ? 'Unavailable' : 'History & Logs'}
+            icon={<Receipt size={22} color={isUserActive ? '#D97706' : '#94A3B8'} strokeWidth={2.4} />}
+            iconBgColor={isUserActive ? '#FEF3C7' : '#F1F5F9'}
+            disabled={!isUserActive}
+            onPress={() => {
+              if (!isUserActive) {
+                showToast('Activity history is disabled while account is inactive.');
+                return;
+              }
+              navigate('ActivityHistory');
+            }}
           />
         </View>
 
         {/* ASSIGNED VEHICLE SECTION */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>ASSIGNED VEHICLE</Text>
-          <TouchableOpacity onPress={() => navigate('VehicleStatus')} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={() => {
+              if (!isUserActive) {
+                showToast('Vehicle asset is unassigned while account is inactive.');
+                return;
+              }
+              navigate('VehicleStatus');
+            }}
+            disabled={!isUserActive}
+            activeOpacity={0.7}
+            style={!isUserActive && { opacity: 0.35 }}
+          >
             <Text style={styles.viewMoreText}>Manage</Text>
           </TouchableOpacity>
         </View>
 
         <VehicleCard
           vehicle={vehicle}
-          onPress={() => navigate('VehicleStatus')}
+          onPress={() => {
+            if (!isUserActive) {
+              showToast('No vehicle assigned to inactive account.');
+              return;
+            }
+            navigate('VehicleStatus');
+          }}
         />
 
         {/* RECENT ACTIVITY SECTION */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>RECENT ACTIVITY</Text>
-          <TouchableOpacity onPress={() => navigate('ActivityHistory')} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={() => {
+              if (!isUserActive) {
+                showToast('Activity logs unavailable while account is inactive.');
+                return;
+              }
+              navigate('ActivityHistory');
+            }}
+            disabled={!isUserActive}
+            activeOpacity={0.7}
+            style={!isUserActive && { opacity: 0.35 }}
+          >
             <Text style={styles.viewMoreText}>View All</Text>
           </TouchableOpacity>
         </View>
@@ -616,6 +782,172 @@ const styles = StyleSheet.create({
   modalCloseBtnText: {
     fontSize: 14,
     fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  inactiveCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.xl,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: '#FEE2E2',
+    marginBottom: 20,
+  },
+  inactiveAccentStrip: {
+    height: 4,
+    backgroundColor: '#EF4444',
+  },
+  inactiveCardBody: {
+    padding: 16,
+  },
+  inactiveHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 10,
+  },
+  inactiveIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inactiveHeaderTexts: {
+    flex: 1,
+  },
+  inactiveStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 3,
+  },
+  inactivePillDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+  },
+  inactivePillText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#DC2626',
+    letterSpacing: 0.8,
+  },
+  inactivePillSub: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  inactiveTitle: {
+    fontSize: 15.5,
+    fontWeight: '800',
+    color: '#1E293B',
+    letterSpacing: -0.2,
+  },
+  inactiveDescription: {
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: '#64748B',
+    marginBottom: 12,
+  },
+  inactiveStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F8FAFC',
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  inactiveStatChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+  },
+  inactiveStatLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  inactiveStatValRed: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
+  inactiveStatValGray: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  inactiveStatValAmber: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  inactiveActionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  btnCall: {
+    flex: 1.25,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#EF4444',
+    paddingVertical: 10,
+    borderRadius: RADIUS.lg,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  btnCallText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  btnWhatsApp: {
+    flex: 1.1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1.2,
+    borderColor: '#A7F3D0',
+    paddingVertical: 9,
+    borderRadius: RADIUS.lg,
+  },
+  btnWhatsAppText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  btnSync: {
+    flex: 0.95,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 9,
+    borderRadius: RADIUS.lg,
+  },
+  btnSyncText: {
+    fontSize: 12,
+    fontWeight: '600',
     color: COLORS.textSecondary,
   },
 });

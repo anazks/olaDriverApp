@@ -13,13 +13,14 @@ import { AppHeader } from '../components/AppHeader';
 import { InputField } from '../components/InputField';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { SuccessModal } from '../components/SuccessModal';
-import { useApp } from '../context/AppContext';
+import { useApp, isAccountActive } from '../context/AppContext';
 import { Phone, CheckCircle2, ShieldCheck, Smartphone } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const MakePaymentScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { financial, processPayment, goBack, activeProfile, driver } = useApp();
+  const isUserActive = isAccountActive(driver.status, driver.isActive);
 
   const [yappyPhone, setYappyPhone] = useState(
     activeProfile?.phone || driver?.phone || '+507 6234-5678'
@@ -145,14 +146,16 @@ export const MakePaymentScreen: React.FC = () => {
           {/* YAPPY PAY ACTION BUTTON */}
           <PrimaryButton
             title={
-              financial.currentDue > 0
+              !isUserActive
+                ? 'Payment Disabled (Account Inactive)'
+                : financial.currentDue > 0
                 ? `Pay with Yappy · $${financial.currentDue.toFixed(2)}`
                 : 'No Pending Balance Due'
             }
             onPress={handlePayWithYappy}
             loading={loading}
-            disabled={financial.currentDue <= 0}
-            style={styles.payBtn}
+            disabled={financial.currentDue <= 0 || !isUserActive}
+            style={[styles.payBtn, !isUserActive && { opacity: 0.5 }]}
           />
 
           {/* SECURE BANCO GENERAL / YAPPY BADGE */}

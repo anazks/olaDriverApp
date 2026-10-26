@@ -10,7 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { COLORS, RADIUS } from '../constants/theme';
-import { useApp } from '../context/AppContext';
+import { useApp, isAccountActive } from '../context/AppContext';
 import { StatusBadge } from './StatusBadge';
 import { ConfirmationModal } from './ConfirmationModal';
 import { OlaBannerLogo } from './OlaLogo';
@@ -34,9 +34,15 @@ export const SideMenu: React.FC = () => {
   const { isDrawerOpen, closeDrawer, driver, navigate, logout, showToast } = useApp();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
+  const isUserActive = isAccountActive(driver.status, driver.isActive);
+
   const handleNavigate = (screen: any) => {
     closeDrawer();
     navigate(screen);
+  };
+
+  const handleDisabledAction = (msg: string) => {
+    showToast(msg);
   };
 
   const handleInfoAction = (title: string) => {
@@ -45,15 +51,43 @@ export const SideMenu: React.FC = () => {
   };
 
   const menuItems = [
-    { label: 'Dashboard', icon: LayoutDashboard, action: () => handleNavigate('Dashboard') },
-    { label: 'My Profile', icon: User, action: () => handleNavigate('Profile') },
-    { label: 'Vehicle', icon: Car, action: () => handleNavigate('VehicleStatus') },
-    { label: 'Payments', icon: CreditCard, action: () => handleNavigate('Payments') },
-    { label: 'Activity History', icon: List, action: () => handleNavigate('ActivityHistory') },
-    { label: 'Payment Methods', icon: Wallet, action: () => handleNavigate('Payments') },
-    { label: 'Help & Support', icon: HelpCircle, action: () => handleInfoAction('Help & Support') },
-    { label: 'Terms & Conditions', icon: FileText, action: () => handleInfoAction('Terms & Conditions') },
-    { label: 'Privacy Policy', icon: Shield, action: () => handleInfoAction('Privacy Policy') },
+    { label: 'Dashboard', icon: LayoutDashboard, action: () => handleNavigate('Dashboard'), disabled: false },
+    { label: 'My Profile', icon: User, action: () => handleNavigate('Profile'), disabled: false },
+    {
+      label: 'Vehicle',
+      icon: Car,
+      action: isUserActive
+        ? () => handleNavigate('VehicleStatus')
+        : () => handleDisabledAction('Vehicle asset is unassigned while account is inactive.'),
+      disabled: !isUserActive,
+    },
+    {
+      label: 'Statements',
+      icon: FileText,
+      action: isUserActive
+        ? () => handleNavigate('Statements')
+        : () => handleDisabledAction('Statements are disabled while account is inactive.'),
+      disabled: !isUserActive,
+    },
+    {
+      label: 'Activity History',
+      icon: List,
+      action: isUserActive
+        ? () => handleNavigate('ActivityHistory')
+        : () => handleDisabledAction('Activity logs are disabled while account is inactive.'),
+      disabled: !isUserActive,
+    },
+    {
+      label: 'Payment Methods',
+      icon: Wallet,
+      action: isUserActive
+        ? () => handleNavigate('Payments')
+        : () => handleDisabledAction('Payment methods are disabled while account is inactive.'),
+      disabled: !isUserActive,
+    },
+    { label: 'Help & Support', icon: HelpCircle, action: () => handleInfoAction('Help & Support'), disabled: false },
+    { label: 'Terms & Conditions', icon: FileText, action: () => handleInfoAction('Terms & Conditions'), disabled: false },
+    { label: 'Privacy Policy', icon: Shield, action: () => handleInfoAction('Privacy Policy'), disabled: false },
   ];
 
   return (
@@ -122,12 +156,22 @@ export const SideMenu: React.FC = () => {
                 return (
                   <TouchableOpacity
                     key={index}
-                    style={styles.menuItem}
+                    style={[styles.menuItem, item.disabled && { opacity: 0.38 }]}
                     onPress={item.action}
-                    activeOpacity={0.7}
+                    activeOpacity={item.disabled ? 0.9 : 0.7}
                   >
-                    <IconComponent size={20} color={COLORS.textSecondary} />
-                    <Text style={styles.menuLabel}>{item.label}</Text>
+                    <IconComponent
+                      size={20}
+                      color={item.disabled ? '#94A3B8' : COLORS.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.menuLabel,
+                        item.disabled && { color: '#94A3B8' },
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
                   </TouchableOpacity>
                 );
               })}

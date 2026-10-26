@@ -80,6 +80,27 @@ export const fetchCustomerStatement = async (
   }
 };
 
+export interface DriverProfileResponse {
+  success: boolean;
+  message?: string;
+  data?: any;
+  driver?: any;
+}
+
+/**
+ * Fetch current logged-in driver's profile, status and assigned vehicle details
+ * Backend endpoint: GET /api/driver/me
+ */
+export const fetchCurrentDriver = async (): Promise<DriverProfileResponse> => {
+  try {
+    const response = await apiClient.get<DriverProfileResponse>('/driver/me');
+    return response.data;
+  } catch (err: any) {
+    console.warn('[authService.fetchCurrentDriver] Backend call failed:', err.message);
+    throw err;
+  }
+};
+
 export interface VehicleDetailsResponse {
   success: boolean;
   message?: string;
@@ -89,13 +110,14 @@ export interface VehicleDetailsResponse {
 
 /**
  * Fetch full vehicle specifications and legal documents
+ * Backend endpoint: GET /api/vehicle/:id
  */
 export const fetchVehicleDetails = async (
   vehicleId: string
 ): Promise<VehicleDetailsResponse> => {
   try {
     const response = await apiClient.get<VehicleDetailsResponse>(
-      `/driver-auth/vehicle/${vehicleId}`
+      `/vehicle/${vehicleId}`
     );
     return response.data;
   } catch (err: any) {
@@ -109,4 +131,5 @@ export default {
   verifyOtpAndLogin,
   fetchCustomerStatement,
   fetchVehicleDetails,
+  fetchCurrentDriver,
 };

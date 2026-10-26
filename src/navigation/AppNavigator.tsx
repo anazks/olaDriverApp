@@ -13,6 +13,7 @@ import { PaymentsScreen } from '../screens/PaymentsScreen';
 import { MakePaymentScreen } from '../screens/MakePaymentScreen';
 import { ActivityHistoryScreen } from '../screens/ActivityHistoryScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
+import { InactiveAccountScreen } from '../screens/InactiveAccountScreen';
 import { SideMenu } from '../components/SideMenu';
 import { Toast } from '../components/Toast';
 
@@ -38,6 +39,7 @@ export const AppNavigator: React.FC = () => {
       case 'VehicleStatus':
         return <VehicleStatusScreen />;
       case 'Payments':
+      case 'Statements':
         return <PaymentsScreen />;
       case 'MakePayment':
         return <MakePaymentScreen />;
@@ -45,6 +47,8 @@ export const AppNavigator: React.FC = () => {
         return <ActivityHistoryScreen />;
       case 'Notifications':
         return <NotificationsScreen />;
+      case 'InactiveAccount':
+        return <InactiveAccountScreen />;
       default:
         return <DashboardScreen />;
     }

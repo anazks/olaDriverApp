@@ -12,6 +12,7 @@ interface QuickActionCardProps {
   badge?: string;
   cardWidth?: number;
   style?: ViewStyle;
+  disabled?: boolean;
 }
 
 export const QuickActionCard: React.FC<QuickActionCardProps> = ({
@@ -23,6 +24,7 @@ export const QuickActionCard: React.FC<QuickActionCardProps> = ({
   badge,
   cardWidth,
   style,
+  disabled = false,
 }) => {
   return (
     <TouchableOpacity
@@ -30,31 +32,35 @@ export const QuickActionCard: React.FC<QuickActionCardProps> = ({
         styles.card,
         SHADOWS.subtle,
         cardWidth ? { width: cardWidth } : null,
+        disabled && { opacity: 0.45, backgroundColor: '#F8FAFC' },
         style,
       ]}
-      onPress={onPress}
-      activeOpacity={0.72}
+      onPress={disabled ? undefined : onPress}
+      activeOpacity={disabled ? 1 : 0.72}
+      disabled={disabled}
     >
       {/* TOP ROW: ICON + TOP-RIGHT ARROW */}
       <View style={styles.topRow}>
-        <View style={[styles.iconContainer, { backgroundColor: iconBgColor }]}>
+        <View style={[styles.iconContainer, { backgroundColor: disabled ? '#E2E8F0' : iconBgColor }]}>
           {icon}
         </View>
 
-        <View style={styles.arrowCircle}>
-          <ArrowUpRight size={15} color={COLORS.textSecondary} strokeWidth={2.4} />
-        </View>
+        {!disabled && (
+          <View style={styles.arrowCircle}>
+            <ArrowUpRight size={15} color={COLORS.textSecondary} strokeWidth={2.4} />
+          </View>
+        )}
       </View>
 
       {/* BOTTOM CONTENT */}
       <View style={styles.textContainer}>
         <View style={styles.titleRow}>
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={[styles.title, disabled && { color: '#94A3B8' }]} numberOfLines={1}>
             {title}
           </Text>
           {badge && (
-            <View style={styles.badgeContainer}>
-              <Text style={styles.badgeText}>{badge}</Text>
+            <View style={[styles.badgeContainer, disabled && { backgroundColor: '#F1F5F9' }]}>
+              <Text style={[styles.badgeText, disabled && { color: '#94A3B8' }]}>{badge}</Text>
             </View>
           )}
         </View>

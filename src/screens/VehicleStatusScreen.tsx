@@ -35,12 +35,13 @@ import {
   ChevronRight,
   X,
   Share2,
+  RefreshCw,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const VehicleStatusScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const { vehicle, updateVehicle, activeProfile, showToast } = useApp();
+  const { vehicle, updateVehicle, activeProfile, showToast, refreshProfile } = useApp();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'maintenance'>('overview');
   const [selectedDoc, setSelectedDoc] = useState<VehicleDocument | null>(null);
@@ -51,14 +52,14 @@ export const VehicleStatusScreen: React.FC = () => {
     let isMounted = true;
     const loadVehicle = async () => {
       try {
-        const queryId =
-          vehicle?.plateNumber ||
-          vehicle?.id ||
-          activeProfile?.vehicle?.plateNumber ||
-          activeProfile?.vehicle?.id;
+        const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+        const candidateId =
+          (vehicle?.id && objectIdRegex.test(vehicle.id) ? vehicle.id : null) ||
+          (vehicle?._id && objectIdRegex.test(vehicle._id) ? vehicle._id : null) ||
+          (activeProfile?.vehicle?.id && objectIdRegex.test(activeProfile.vehicle.id) ? activeProfile.vehicle.id : null);
 
-        if (queryId) {
-          const res = await fetchVehicleDetails(queryId);
+        if (candidateId) {
+          const res = await fetchVehicleDetails(candidateId);
           if (isMounted && (res?.data || res?.vehicle)) {
             updateVehicle(res.data || res.vehicle);
           }
@@ -72,7 +73,7 @@ export const VehicleStatusScreen: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [vehicle?.plateNumber, vehicle?.id]);
+  }, [vehicle?.id, vehicle?._id]);
 
   const currentMileage = vehicle?.currentMileage || 0;
   const nextService = vehicle?.nextService || 0;
@@ -91,6 +92,42 @@ export const VehicleStatusScreen: React.FC = () => {
   const handleDownloadDoc = (doc: VehicleDocument) => {
     showToast(`Downloading ${doc.title}...`);
   };
+
+  const hasVehicle = Boolean(vehicle.make || vehicle.model || vehicle.plateNumber || (vehicle.id && vehicle.id.length > 2));
+
+  if (!hasVehicle) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <AppHeader title="Vehicle Info & Status" showBack />
+        <View style={styles.unassignedContainer}>
+          <View style={styles.unassignedCard}>
+            <View style={styles.unassignedIconCircle}>
+              <Car size={36} color="#64748B" />
+            </View>
+            <View style={styles.unassignedBadge}>
+              <Text style={styles.unassignedBadgeText}>STATUS: UNASSIGNED</Text>
+            </View>
+            <Text style={styles.unassignedTitle}>Vehicle Asset Unassigned</Text>
+            <Text style={styles.unassignedDesc}>
+              No vehicle is currently assigned to your driver account. If you have an active contract, tap below to check allocation or contact OLACARS support.
+            </Text>
+            <TouchableOpacity
+              style={styles.unassignedActionBtn}
+              onPress={async () => {
+                showToast('Checking vehicle assignment...');
+                await refreshProfile();
+              }}
+              activeOpacity={0.8}
+            >
+              <RefreshCw size={18} color="#000000" />
+              <Text style={styles.unassignedActionText}>Check Vehicle Allocation</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        <BottomNavigation />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -1167,5 +1204,75 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 14,
     fontWeight: '700',
+  },
+  // Unassigned State Styles
+  unassignedContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  unassignedCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: RADIUS.xl,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...SHADOWS.card,
+  },
+  unassignedIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  unassignedBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    marginBottom: 12,
+  },
+  unassignedBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#DC2626',
+    letterSpacing: 0.5,
+  },
+  unassignedTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  unassignedDesc: {
+    fontSize: 13.5,
+    color: '#64748B',
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  unassignedActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.primary,
+    height: 48,
+    paddingHorizontal: 20,
+    borderRadius: RADIUS.lg,
+    width: '100%',
+  },
+  unassignedActionText: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#000000',
   },
 });

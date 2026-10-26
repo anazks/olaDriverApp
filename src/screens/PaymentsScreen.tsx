@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,45 +7,74 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  TextInput,
+  Modal,
+  Platform,
 } from 'react-native';
 import { COLORS, RADIUS, SHADOWS } from '../constants/theme';
 import { AppHeader } from '../components/AppHeader';
-import { PaymentCard } from '../components/PaymentCard';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { useApp } from '../context/AppContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchCustomerStatement } from '../api/authService';
-import { StatementTransaction, CustomerStatementData, PendingInvoice } from '../types';
+import { StatementTransaction, CustomerStatementData } from '../types';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import {
   FileText,
   CheckCircle2,
-  ArrowUpRight,
   ArrowDownLeft,
   AlertCircle,
-  Calendar,
-  Clock,
   RotateCcw,
   RefreshCw,
-  CreditCard,
-  ShieldCheck,
+  Search,
+  X,
+  FileDown,
+  ArrowUpDown,
+  Filter,
+  Check,
+  Calendar,
+  ChevronRight,
+  Printer,
+  Car,
+  Clock,
 } from 'lucide-react-native';
+
+type SortOption = 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc' | 'ref_asc';
+type TypeFilter = 'ALL' | 'INVOICE' | 'PAYMENT' | 'CREDIT_NOTE';
+type StatusFilter = 'ALL' | 'PAID' | 'PENDING';
+
+const SORT_LABELS: Record<SortOption, string> = {
+  date_desc: 'Newest First',
+  date_asc: 'Oldest First',
+  amount_desc: 'Amount: High to Low',
+  amount_asc: 'Amount: Low to High',
+  ref_asc: 'Reference: A to Z',
+};
 
 export const PaymentsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const {
     financial,
     updateFinancial,
-    paymentMethods,
-    navigate,
     showToast,
     activeProfile,
     driver,
+    vehicle,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'statement'>('overview');
   const [statementData, setStatementData] = useState<CustomerStatementData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [downloadingPdf, setDownloadingPdf] = useState<boolean>(false);
+
+  // Search, Filter & Sort State
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [sortOption, setSortOption] = useState<SortOption>('date_desc');
+  const [showSortModal, setShowSortModal] = useState<boolean>(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<StatementTransaction | null>(null);
 
   // Load statement from backend
   const loadStatement = useCallback(async (isPullRefresh = false) => {
@@ -61,10 +90,10 @@ export const PaymentsScreen: React.FC = () => {
       if (res && res.success) {
         setStatementData({
           summary: res.summary,
-          statement: res.statement,
+          statement: res.statement || [],
         });
 
-        // Keep AppContext financial pending balance synchronized with backend customer statement
+        // Keep financial data synchronized
         if (typeof res.summary?.pendingAmount === 'number') {
           updateFinancial({
             currentDue: res.summary.pendingAmount,
@@ -87,14 +116,373 @@ export const PaymentsScreen: React.FC = () => {
     loadStatement();
   }, [loadStatement]);
 
-  const pendingAmount = statementData?.summary?.pendingAmount ?? financial.currentDue;
-  const dueDate = statementData?.summary?.nextDueDate ?? financial.paymentDueDate;
-  const pendingInvoices = statementData?.summary?.pendingInvoices || [];
-  const statementList = statementData?.statement || [];
+  const rawStatementList = statementData?.statement || [];
+
+  // Summary Metrics
+  const totalInvoiced = statementData?.summary?.totalInvoiced ?? 
+    rawStatementList.reduce((acc, item) => acc + (item.debit || 0), 0);
+  const totalPaid = statementData?.summary?.totalPaid ?? 
+    rawStatementList.reduce((acc, item) => acc + (item.credit || 0), 0);
+  const closingBalance = statementData?.summary?.closingBalance ?? (totalInvoiced - totalPaid);
+
+  // Filter & Sort Logic
+  const filteredAndSortedList = useMemo(() => {
+    let result = [...rawStatementList];
+
+    // Search query filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.trim().toLowerCase();
+      result = result.filter(
+        (item) =>
+          item.refNumber?.toLowerCase().includes(query) ||
+          item.description?.toLowerCase().includes(query) ||
+          item.date?.toLowerCase().includes(query)
+      );
+    }
+
+    // Type filter
+    if (typeFilter !== 'ALL') {
+      result = result.filter((item) => {
+        const t = (item.type || '').toUpperCase();
+        if (typeFilter === 'INVOICE') return t.includes('INVOICE');
+        if (typeFilter === 'PAYMENT') return t.includes('PAYMENT');
+        if (typeFilter === 'CREDIT_NOTE') return t.includes('CREDIT');
+        return true;
+      });
+    }
+
+    // Status filter
+    if (statusFilter !== 'ALL') {
+      result = result.filter((item) => {
+        const s = (item.status || '').toUpperCase();
+        if (statusFilter === 'PAID') return s === 'PAID' || s === 'COMPLETED';
+        if (statusFilter === 'PENDING') return s === 'PENDING' || s === 'DUE' || s === 'OVERDUE';
+        return true;
+      });
+    }
+
+    // Sorting
+    result.sort((a, b) => {
+      switch (sortOption) {
+        case 'date_asc':
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+        case 'date_desc':
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+        case 'amount_desc': {
+          const valA = Math.max(a.debit || 0, a.credit || 0);
+          const valB = Math.max(b.debit || 0, b.credit || 0);
+          return valB - valA;
+        }
+        case 'amount_asc': {
+          const valA = Math.max(a.debit || 0, a.credit || 0);
+          const valB = Math.max(b.debit || 0, b.credit || 0);
+          return valA - valB;
+        }
+        case 'ref_asc':
+          return (a.refNumber || '').localeCompare(b.refNumber || '');
+        default:
+          return 0;
+      }
+    });
+
+    return result;
+  }, [rawStatementList, searchQuery, typeFilter, statusFilter, sortOption]);
+
+  // Generate and Download PDF Statement
+  const handleDownloadPdf = async () => {
+    if (downloadingPdf) return;
+    setDownloadingPdf(true);
+
+    try {
+      const customerName = driver.name || activeProfile?.name || 'Customer';
+      const customerId = activeProfile?.customerId || (activeProfile as any)?.customerNumber || driver.driverId || 'N/A';
+      const phone = activeProfile?.phone || driver.phone || 'N/A';
+      const email = activeProfile?.email || driver.email || 'N/A';
+      const vehicleInfo = vehicle.plateNumber
+        ? `${vehicle.year} ${vehicle.make} ${vehicle.model} · Plate: ${vehicle.plateNumber}`
+        : 'Not Assigned';
+      const statementDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+
+      const tableRowsHtml = filteredAndSortedList.map((item, index) => {
+        const isInvoice = item.type?.toUpperCase().includes('INVOICE');
+        const isPayment = item.type?.toUpperCase().includes('PAYMENT');
+        const isPaid = item.status?.toUpperCase() === 'PAID' || item.status?.toUpperCase() === 'COMPLETED';
+
+        return `
+          <tr style="background-color: ${index % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+              ${new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-weight: 700; font-size: 11px; color: #0f172a;">
+              ${item.refNumber || '-'}
+            </td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 11px; color: #334155;">
+              ${item.description || '-'}
+            </td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+              ${item.type || 'Standard'}
+            </td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; text-align: right; font-size: 11px; font-weight: 700; color: #b45309;">
+              ${item.debit > 0 ? `$${item.debit.toFixed(2)}` : '-'}
+            </td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; text-align: right; font-size: 11px; font-weight: 700; color: #059669;">
+              ${item.credit > 0 ? `$${item.credit.toFixed(2)}` : '-'}
+            </td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; text-align: right; font-size: 11px; font-weight: 800; color: #0f172a;">
+              $${item.runningBalance.toFixed(2)}
+            </td>
+            <td style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; text-align: center; font-size: 10px;">
+              <span style="display: inline-block; padding: 2px 7px; border-radius: 4px; font-weight: 700; background-color: ${
+                isPaid ? '#d1fae5' : '#fef3c7'
+              }; color: ${isPaid ? '#065f46' : '#92400e'};">
+                ${item.status || 'PENDING'}
+              </span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>OLA CARS - Customer Statement</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+              color: #1e293b;
+              margin: 0;
+              padding: 32px;
+              font-size: 12px;
+              line-height: 1.5;
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              border-bottom: 2px solid #00A86B;
+              padding-bottom: 18px;
+              margin-bottom: 22px;
+            }
+            .brand-title {
+              font-size: 24px;
+              font-weight: 900;
+              color: #00A86B;
+              letter-spacing: -0.5px;
+              margin: 0;
+            }
+            .brand-sub {
+              font-size: 10px;
+              color: #64748b;
+              margin: 4px 0 0 0;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              font-weight: 700;
+            }
+            .statement-title {
+              font-size: 18px;
+              font-weight: 800;
+              color: #0f172a;
+              text-align: right;
+              margin: 0;
+            }
+            .statement-date {
+              font-size: 11px;
+              color: #64748b;
+              text-align: right;
+              margin-top: 4px;
+            }
+            .info-grid {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 22px;
+              background: #f8fafc;
+              border: 1px solid #e2e8f0;
+              border-radius: 8px;
+              padding: 16px;
+            }
+            .info-col {
+              flex: 1;
+            }
+            .info-label {
+              font-size: 9px;
+              text-transform: uppercase;
+              color: #64748b;
+              font-weight: 700;
+              letter-spacing: 0.5px;
+              margin-bottom: 3px;
+            }
+            .info-value {
+              font-size: 12px;
+              font-weight: 700;
+              color: #0f172a;
+            }
+            .summary-cards {
+              display: flex;
+              gap: 12px;
+              margin-bottom: 24px;
+            }
+            .card {
+              flex: 1;
+              padding: 12px;
+              border-radius: 8px;
+              border: 1px solid #e2e8f0;
+              background: #ffffff;
+              text-align: center;
+            }
+            .card-label {
+              font-size: 10px;
+              text-transform: uppercase;
+              color: #64748b;
+              font-weight: 700;
+            }
+            .card-value {
+              font-size: 18px;
+              font-weight: 800;
+              margin-top: 4px;
+              color: #0f172a;
+            }
+            .card-paid .card-value {
+              color: #059669;
+            }
+            .card-due .card-value {
+              color: #b45309;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 28px;
+            }
+            th {
+              background: #0f172a;
+              color: #ffffff;
+              text-align: left;
+              font-size: 10px;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              padding: 10px 12px;
+              font-weight: 700;
+            }
+            th.text-right {
+              text-align: right;
+            }
+            th.text-center {
+              text-align: center;
+            }
+            .footer {
+              border-top: 1px solid #e2e8f0;
+              padding-top: 16px;
+              font-size: 10px;
+              color: #94a3b8;
+              text-align: center;
+              line-height: 1.6;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <h1 class="brand-title">OLA CARS PANAMA</h1>
+              <p class="brand-sub">Official Customer Statement & Ledger</p>
+            </div>
+            <div>
+              <h2 class="statement-title">STATEMENT OF ACCOUNT</h2>
+              <p class="statement-date">Generated: ${statementDate}</p>
+            </div>
+          </div>
+
+          <div class="info-grid">
+            <div class="info-col">
+              <div class="info-label">Customer / Driver</div>
+              <div class="info-value">${customerName}</div>
+              <div style="font-size: 11px; color: #64748b; margin-top: 2px;">ID: ${customerId}</div>
+            </div>
+            <div class="info-col">
+              <div class="info-label">Contact Details</div>
+              <div class="info-value">${phone}</div>
+              <div style="font-size: 11px; color: #64748b; margin-top: 2px;">${email}</div>
+            </div>
+            <div class="info-col">
+              <div class="info-label">Assigned Vehicle</div>
+              <div class="info-value">${vehicleInfo}</div>
+            </div>
+          </div>
+
+          <div class="summary-cards">
+            <div class="card">
+              <div class="card-label">Total Invoiced</div>
+              <div class="card-value">$${totalInvoiced.toFixed(2)}</div>
+            </div>
+            <div class="card card-paid">
+              <div class="card-label">Total Paid</div>
+              <div class="card-value">$${totalPaid.toFixed(2)}</div>
+            </div>
+            <div class="card card-due">
+              <div class="card-label">Closing Balance</div>
+              <div class="card-value">$${closingBalance.toFixed(2)}</div>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Reference #</th>
+                <th>Description</th>
+                <th>Type</th>
+                <th class="text-right">Debit ($)</th>
+                <th class="text-right">Credit ($)</th>
+                <th class="text-right">Balance ($)</th>
+                <th class="text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                filteredAndSortedList.length > 0
+                  ? tableRowsHtml
+                  : `<tr><td colspan="8" style="text-align: center; padding: 24px; color: #64748b;">No statement entries matching current filters.</td></tr>`
+              }
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <p><strong>OLA CARS PANAMA S.A.</strong> · Automated Fleet Accounting System</p>
+            <p>This is an official computer-generated statement. For disputes or queries, contact fleet finance at support@olacars.com</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const { uri } = await Print.printToFileAsync({ html: htmlContent });
+      const isAvailable = await Sharing.isAvailableAsync();
+
+      if (isAvailable) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: 'Download Statement PDF',
+          UTI: '.pdf',
+        });
+        showToast('Statement PDF generated and ready to download');
+      } else {
+        await Print.printAsync({ uri });
+        showToast('Statement sent to printer/viewer');
+      }
+    } catch (err: any) {
+      console.warn('[PaymentsScreen] PDF generation error:', err.message);
+      showToast('Could not generate PDF: ' + err.message);
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <AppHeader title="Payments" showBack />
+      <AppHeader title="Statements" showBack />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -108,391 +496,477 @@ export const PaymentsScreen: React.FC = () => {
           />
         }
       >
-        {/* TOP PAYMENT CARD — SHOWS REAL PENDING BALANCE & PAY NOW BUTTON */}
-        <PaymentCard
-          totalDue={pendingAmount}
-          dueDate={dueDate}
-          buttonText={
-            pendingAmount > 0
-              ? `Pay Pending Balance · $${pendingAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-              : 'Pay Now'
-          }
-          onPayNow={() => navigate('MakePayment')}
-        />
+        {/* EXECUTIVE STATEMENT SUMMARY & ACTION HEADER */}
+        <View style={[styles.summaryCard, SHADOWS.subtle]}>
+          <View style={styles.summaryTopRow}>
+            <View style={styles.customerMetaCol}>
+              <Text style={styles.customerName} numberOfLines={1}>
+                {driver.name || activeProfile?.name || 'Customer Account'}
+              </Text>
+              <View style={styles.idBadgeRow}>
+                <View style={styles.idChip}>
+                  <Text style={styles.idChipText}>
+                    {activeProfile?.customerId || (activeProfile as any)?.customerNumber || driver.driverId || 'CUST-ACCOUNT'}
+                  </Text>
+                </View>
+                {vehicle.plateNumber ? (
+                  <View style={styles.vehicleChip}>
+                    <Car size={11} color="#475569" />
+                    <Text style={styles.vehicleChipText}>{vehicle.plateNumber}</Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
 
-        {/* SEGMENTED TABS: OVERVIEW / STATEMENT */}
-        <View style={styles.segmentContainer}>
-          <TouchableOpacity
-            style={[
-              styles.segmentTab,
-              activeTab === 'overview' && styles.segmentTabActive,
-            ]}
-            onPress={() => setActiveTab('overview')}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.segmentText,
-                activeTab === 'overview' && styles.segmentTextActive,
-              ]}
+            <TouchableOpacity
+              style={styles.refreshIconBtn}
+              onPress={() => loadStatement(true)}
+              activeOpacity={0.7}
             >
-              Overview
-            </Text>
-          </TouchableOpacity>
+              <RefreshCw size={15} color={COLORS.primary} />
+            </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity
-            style={[
-              styles.segmentTab,
-              activeTab === 'statement' && styles.segmentTabActive,
-            ]}
-            onPress={() => setActiveTab('statement')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.tabBadgeRow}>
+          {/* FINANCIAL STATS CHIPS (3-COLUMN ROW) */}
+          <View style={styles.metricsRow}>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Total Invoiced</Text>
+              <Text style={styles.metricVal}>${totalInvoiced.toFixed(2)}</Text>
+            </View>
+            <View style={styles.metricDivider} />
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Total Paid</Text>
+              <Text style={[styles.metricVal, { color: '#059669' }]}>${totalPaid.toFixed(2)}</Text>
+            </View>
+            <View style={styles.metricDivider} />
+            <View style={styles.metricCard}>
+              <Text style={styles.metricLabel}>Closing Balance</Text>
               <Text
                 style={[
-                  styles.segmentText,
-                  activeTab === 'statement' && styles.segmentTextActive,
+                  styles.metricVal,
+                  { color: closingBalance > 0 ? '#B45309' : COLORS.text },
                 ]}
               >
-                Statement
+                ${closingBalance.toFixed(2)}
               </Text>
-              {statementList.length > 0 && (
-                <View style={styles.countBadge}>
-                  <Text style={styles.countBadgeText}>{statementList.length}</Text>
-                </View>
-              )}
             </View>
+          </View>
+
+          {/* DOWNLOAD PDF ACTION BUTTON */}
+          <TouchableOpacity
+            style={[styles.downloadPdfButton, downloadingPdf && styles.btnDisabled]}
+            onPress={handleDownloadPdf}
+            disabled={downloadingPdf}
+            activeOpacity={0.8}
+          >
+            {downloadingPdf ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <FileDown size={17} color={COLORS.white} strokeWidth={2.4} />
+            )}
+            <Text style={styles.downloadPdfButtonText}>
+              {downloadingPdf ? 'Generating PDF Statement...' : 'Download Statement PDF'}
+            </Text>
           </TouchableOpacity>
         </View>
 
+        {/* SEARCH & CONTROLS TOOLBAR */}
+        <View style={styles.controlsSection}>
+          {/* SEARCH BAR */}
+          <View style={styles.searchBar}>
+            <Search size={16} color={COLORS.textSecondary} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search ref #, description, date..."
+              placeholderTextColor="#94A3B8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              clearButtonMode="while-editing"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <X size={16} color="#94A3B8" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* FILTER & SORT ROW */}
+          <View style={styles.filterSortRow}>
+            {/* TYPE FILTER PILLS */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterPillsScroll}
+            >
+              <TouchableOpacity
+                style={[styles.filterPill, typeFilter === 'ALL' && styles.filterPillActive]}
+                onPress={() => setTypeFilter('ALL')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.filterPillText, typeFilter === 'ALL' && styles.filterPillTextActive]}>
+                  All Types
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterPill, typeFilter === 'INVOICE' && styles.filterPillActive]}
+                onPress={() => setTypeFilter('INVOICE')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.filterPillText, typeFilter === 'INVOICE' && styles.filterPillTextActive]}>
+                  Invoices
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterPill, typeFilter === 'PAYMENT' && styles.filterPillActive]}
+                onPress={() => setTypeFilter('PAYMENT')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.filterPillText, typeFilter === 'PAYMENT' && styles.filterPillTextActive]}>
+                  Payments
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterPill, typeFilter === 'CREDIT_NOTE' && styles.filterPillActive]}
+                onPress={() => setTypeFilter('CREDIT_NOTE')}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.filterPillText, typeFilter === 'CREDIT_NOTE' && styles.filterPillTextActive]}>
+                  Credit Notes
+                </Text>
+              </TouchableOpacity>
+
+              {/* STATUS FILTER PILLS */}
+              <View style={styles.pillSeparator} />
+
+              <TouchableOpacity
+                style={[styles.filterPill, statusFilter === 'PAID' && styles.filterPillActiveEmerald]}
+                onPress={() => setStatusFilter(statusFilter === 'PAID' ? 'ALL' : 'PAID')}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.filterPillText,
+                    statusFilter === 'PAID' && styles.filterPillTextActiveEmerald,
+                  ]}
+                >
+                  Paid Only
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.filterPill, statusFilter === 'PENDING' && styles.filterPillActiveAmber]}
+                onPress={() => setStatusFilter(statusFilter === 'PENDING' ? 'ALL' : 'PENDING')}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.filterPillText,
+                    statusFilter === 'PENDING' && styles.filterPillTextActiveAmber,
+                  ]}
+                >
+                  Pending Only
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+
+            {/* SORT BUTTON */}
+            <TouchableOpacity
+              style={styles.sortButton}
+              onPress={() => setShowSortModal(true)}
+              activeOpacity={0.7}
+            >
+              <ArrowUpDown size={14} color={COLORS.primary} />
+              <Text style={styles.sortButtonText}>{SORT_LABELS[sortOption]}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* RESULTS HEADER */}
+        <View style={styles.listHeaderRow}>
+          <Text style={styles.listHeaderTitle}>Statement Ledger</Text>
+          <Text style={styles.listHeaderCount}>
+            {filteredAndSortedList.length} {filteredAndSortedList.length === 1 ? 'Record' : 'Records'}
+          </Text>
+        </View>
+
+        {/* STATEMENT TRANSACTIONS LIST */}
         {loading && !refreshing ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={styles.loadingText}>Fetching statement & ledger...</Text>
+            <Text style={styles.loadingText}>Fetching statement ledger...</Text>
           </View>
-        ) : activeTab === 'overview' ? (
-          <>
-            {/* OVERVIEW SECTION: PENDING AMOUNT DATA */}
-            <View style={[styles.pendingSummaryCard, SHADOWS.subtle]}>
-              <View style={styles.pendingHeaderRow}>
-                <View>
-                  <Text style={styles.pendingLabel}>Pending Amount Due</Text>
-                  <Text style={styles.pendingAmountLarge}>
-                    ${pendingAmount.toLocaleString('en-US', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </Text>
-                </View>
-                <View
+        ) : filteredAndSortedList.length > 0 ? (
+          <View style={[styles.statementCard, SHADOWS.subtle]}>
+            {filteredAndSortedList.map((item, index) => {
+              const isInvoice = item.type?.toUpperCase().includes('INVOICE');
+              const isPayment = item.type?.toUpperCase().includes('PAYMENT');
+              const isPaid = item.status?.toUpperCase() === 'PAID' || item.status?.toUpperCase() === 'COMPLETED';
+
+              return (
+                <TouchableOpacity
+                  key={item.id || item.refNumber || index}
                   style={[
-                    styles.pendingStatusBadge,
-                    pendingAmount > 0 ? styles.badgePending : styles.badgePaid,
+                    styles.statementRow,
+                    index !== filteredAndSortedList.length - 1 && styles.rowDivider,
                   ]}
+                  onPress={() => setSelectedTransaction(item)}
+                  activeOpacity={0.7}
                 >
-                  {pendingAmount > 0 ? (
-                    <Clock size={13} color="#D97706" />
-                  ) : (
-                    <CheckCircle2 size={13} color="#059669" />
-                  )}
-                  <Text
-                    style={[
-                      styles.pendingStatusText,
-                      pendingAmount > 0 ? styles.textPending : styles.textPaid,
-                    ]}
-                  >
-                    {pendingAmount > 0 ? 'Payment Due' : 'Paid in Full'}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.pendingMetaRow}>
-                <Calendar size={14} color={COLORS.textSecondary} />
-                <Text style={styles.pendingMetaText}>
-                  Scheduled Due Date: <Text style={styles.boldText}>{dueDate}</Text>
-                </Text>
-              </View>
-            </View>
-
-            {/* PENDING CHARGES BREAKDOWN */}
-            <View style={[styles.breakdownCard, SHADOWS.subtle]}>
-              <Text style={styles.sectionTitle}>Pending Charges Breakdown</Text>
-
-              <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Base Weekly Rental</Text>
-                <Text style={styles.breakdownValue}>
-                  ${(statementData?.summary?.breakdown?.baseRental ?? financial.baseRental).toFixed(2)}
-                </Text>
-              </View>
-
-              <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Comprehensive Insurance</Text>
-                <Text style={styles.breakdownValue}>
-                  ${(statementData?.summary?.breakdown?.insurance ?? financial.insurance).toFixed(2)}
-                </Text>
-              </View>
-
-              <View style={styles.breakdownRow}>
-                <Text style={styles.breakdownLabel}>Platform & Maintenance Fee</Text>
-                <Text style={styles.breakdownValue}>
-                  ${(statementData?.summary?.breakdown?.serviceFee ?? financial.serviceFee).toFixed(2)}
-                </Text>
-              </View>
-
-              <View style={styles.divider} />
-
-              <View style={styles.breakdownTotalRow}>
-                <Text style={styles.totalLabel}>Total Pending Balance</Text>
-                <Text style={styles.totalAmount}>
-                  ${pendingAmount.toFixed(2)}
-                </Text>
-              </View>
-            </View>
-
-            {/* PENDING INVOICES LIST (IF ANY) */}
-            {pendingInvoices.length > 0 && (
-              <View style={[styles.pendingInvoicesCard, SHADOWS.subtle]}>
-                <View style={styles.invoicesHeader}>
-                  <Text style={styles.sectionTitle}>Pending Invoices</Text>
-                  <View style={styles.invoiceCountChip}>
-                    <Text style={styles.invoiceCountChipText}>
-                      {pendingInvoices.length} {pendingInvoices.length === 1 ? 'Invoice' : 'Invoices'}
-                    </Text>
-                  </View>
-                </View>
-
-                {pendingInvoices.map((inv: PendingInvoice, idx: number) => (
-                  <View
-                    key={inv.id || idx}
-                    style={[
-                      styles.invoiceItemRow,
-                      idx !== pendingInvoices.length - 1 && styles.borderBottom,
-                    ]}
-                  >
-                    <View style={styles.invoiceIconBox}>
-                      <FileText size={18} color="#D97706" />
+                  <View style={styles.rowMain}>
+                    {/* ICON */}
+                    <View
+                      style={[
+                        styles.typeIconBox,
+                        isInvoice
+                          ? styles.iconBoxInvoice
+                          : isPayment
+                          ? styles.iconBoxPayment
+                          : styles.iconBoxCredit,
+                      ]}
+                    >
+                      {isInvoice ? (
+                        <FileText size={16} color="#D97706" />
+                      ) : isPayment ? (
+                        <ArrowDownLeft size={16} color="#059669" />
+                      ) : (
+                        <RotateCcw size={16} color="#7C3AED" />
+                      )}
                     </View>
-                    <View style={styles.invoiceInfo}>
-                      <Text style={styles.invoiceNumber}>{inv.invoiceNumber}</Text>
-                      <Text style={styles.invoiceDesc} numberOfLines={1}>
-                        {inv.description}
+
+                    {/* DETAILS */}
+                    <View style={styles.rowTextCol}>
+                      <View style={styles.refRow}>
+                        <Text style={styles.refNumber}>{item.refNumber}</Text>
+                        <View
+                          style={[
+                            styles.statusTag,
+                            isPaid ? styles.statusTagPaid : styles.statusTagPending,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusTagText,
+                              isPaid ? styles.statusTextPaid : styles.statusTextPending,
+                            ]}
+                          >
+                            {item.status || 'PENDING'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Text style={styles.itemDescription} numberOfLines={1}>
+                        {item.description}
                       </Text>
-                      <Text style={styles.invoiceDueDate}>
-                        Due: {new Date(inv.dueDate).toLocaleDateString('en-US', {
+
+                      <Text style={styles.itemDate}>
+                        {new Date(item.date).toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric',
                         })}
                       </Text>
                     </View>
-                    <View style={styles.invoiceAmountCol}>
-                      <Text style={styles.invoiceAmountText}>
-                        ${inv.remaining.toFixed(2)}
-                      </Text>
-                      <View style={styles.pendingMiniBadge}>
-                        <Text style={styles.pendingMiniBadgeText}>
-                          {inv.status || 'PENDING'}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
 
-            {/* YAPPY INSTANT PAYMENT METHOD */}
-            <View style={[styles.yappyCard, SHADOWS.subtle]}>
-              <View style={styles.yappyHeaderRow}>
-                <View style={styles.yappyTitleGroup}>
-                  <View style={styles.yappyIconBox}>
-                    <Text style={styles.yappyIconText}>Y</Text>
-                  </View>
-                  <View>
-                    <Text style={styles.yappyTitle}>Yappy by Banco General</Text>
-                    <Text style={styles.yappySubtitle}>Primary Mobile Payment</Text>
-                  </View>
-                </View>
-                <View style={styles.yappyActiveBadge}>
-                  <CheckCircle2 size={13} color="#059669" />
-                  <Text style={styles.yappyActiveText}>Connected</Text>
-                </View>
-              </View>
+                    {/* AMOUNTS */}
+                    <View style={styles.rowAmountCol}>
+                      {isInvoice && item.debit > 0 && (
+                        <Text style={styles.debitText}>+${item.debit.toFixed(2)}</Text>
+                      )}
+                      {isPayment && item.credit > 0 && (
+                        <Text style={styles.creditText}>-${item.credit.toFixed(2)}</Text>
+                      )}
+                      {!isInvoice && !isPayment && item.credit > 0 && (
+                        <Text style={styles.creditNoteText}>-${item.credit.toFixed(2)}</Text>
+                      )}
 
-              <View style={styles.yappyInfoBox}>
-                <View style={styles.yappyInfoRow}>
-                  <Text style={styles.yappyLabel}>Merchant Directory</Text>
-                  <Text style={styles.yappyValueBold}>@OlaCarsPanama</Text>
-                </View>
-                <View style={styles.yappyInfoRow}>
-                  <Text style={styles.yappyLabel}>Registered Phone</Text>
-                  <Text style={styles.yappyValue}>
-                    {activeProfile?.phone || driver.phone || 'On file'}
-                  </Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={styles.yappyPayActionBtn}
-                onPress={() => navigate('MakePayment')}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.yappyPayActionText}>
-                  Pay with Yappy · ${pendingAmount.toFixed(2)}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        ) : (
-          /* STATEMENT SECTION (RENAMED FROM HISTORY) */
-          <View style={styles.statementSection}>
-            {/* STATEMENT SUMMARY METRICS */}
-            <View style={[styles.statementMetricsCard, SHADOWS.subtle]}>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>Total Invoiced</Text>
-                <Text style={styles.metricValue}>
-                  ${(statementData?.summary?.totalInvoiced ?? 0).toFixed(2)}
-                </Text>
-              </View>
-              <View style={styles.metricDivider} />
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>Total Paid</Text>
-                <Text style={[styles.metricValue, { color: '#059669' }]}>
-                  ${(statementData?.summary?.totalPaid ?? 0).toFixed(2)}
-                </Text>
-              </View>
-              <View style={styles.metricDivider} />
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>Closing Balance</Text>
-                <Text style={[styles.metricValue, { color: COLORS.text }]}>
-                  ${(statementData?.summary?.closingBalance ?? pendingAmount).toFixed(2)}
-                </Text>
-              </View>
-            </View>
-
-            {/* STATEMENT TRANSACTIONS HEADER */}
-            <View style={styles.statementHeaderRow}>
-              <Text style={styles.sectionTitle}>Customer Statement Registry</Text>
-              <TouchableOpacity
-                onPress={() => loadStatement(true)}
-                style={styles.refreshBtn}
-                activeOpacity={0.7}
-              >
-                <RefreshCw size={14} color={COLORS.primary} />
-                <Text style={styles.refreshBtnText}>Refresh</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* STATEMENT TRANSACTIONS LIST */}
-            <View style={[styles.statementListCard, SHADOWS.subtle]}>
-              {statementList.length > 0 ? (
-                statementList.map((item: StatementTransaction, index: number) => {
-                  const isInvoice = item.type?.toUpperCase() === 'INVOICE';
-                  const isPayment = item.type?.toUpperCase() === 'PAYMENT';
-                  const isCreditNote = item.type?.toUpperCase().includes('CREDIT');
-
-                  return (
-                    <View
-                      key={item.id || index}
-                      style={[
-                        styles.statementItem,
-                        index !== statementList.length - 1 && styles.borderBottom,
-                      ]}
-                    >
-                      <View style={styles.itemTopRow}>
-                        <View style={styles.itemTypeGroup}>
-                          <View
-                            style={[
-                              styles.itemIconCircle,
-                              isInvoice
-                                ? styles.iconInvoice
-                                : isPayment
-                                ? styles.iconPayment
-                                : styles.iconCredit,
-                            ]}
-                          >
-                            {isInvoice ? (
-                              <FileText size={15} color="#D97706" />
-                            ) : isPayment ? (
-                              <ArrowDownLeft size={15} color="#059669" />
-                            ) : (
-                              <RotateCcw size={15} color="#7C3AED" />
-                            )}
-                          </View>
-                          <View>
-                            <Text style={styles.itemRefNumber}>{item.refNumber}</Text>
-                            <Text style={styles.itemDate}>
-                              {new Date(item.date).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                              })}
-                            </Text>
-                          </View>
-                        </View>
-
-                        <View style={styles.amountCol}>
-                          {isInvoice && item.debit > 0 && (
-                            <Text style={styles.debitAmount}>
-                              +${item.debit.toFixed(2)}
-                            </Text>
-                          )}
-                          {isPayment && item.credit > 0 && (
-                            <Text style={styles.creditAmount}>
-                              -${item.credit.toFixed(2)}
-                            </Text>
-                          )}
-                          {isCreditNote && item.credit > 0 && (
-                            <Text style={styles.creditNoteAmount}>
-                              -${item.credit.toFixed(2)}
-                            </Text>
-                          )}
-                          <View
-                            style={[
-                              styles.statusBadge,
-                              item.status === 'PAID' || item.status === 'COMPLETED'
-                                ? styles.badgePaid
-                                : styles.badgePending,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.statusBadgeText,
-                                item.status === 'PAID' || item.status === 'COMPLETED'
-                                  ? styles.textPaid
-                                  : styles.textPending,
-                              ]}
-                            >
-                              {item.status}
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-
-                      <View style={styles.itemBottomRow}>
-                        <Text style={styles.itemDesc} numberOfLines={1}>
-                          {item.description}
-                        </Text>
-                        <Text style={styles.runningBalanceText}>
+                      <View style={styles.balancePill}>
+                        <Text style={styles.balancePillText}>
                           Bal: ${item.runningBalance.toFixed(2)}
                         </Text>
                       </View>
                     </View>
-                  );
-                })
-              ) : (
-                <View style={styles.emptyState}>
-                  <AlertCircle size={32} color={COLORS.textSecondary} />
-                  <Text style={styles.emptyTitle}>No Statement Records</Text>
-                  <Text style={styles.emptyText}>
-                    Financial statement records will appear here as rental invoices and payments are generated.
-                  </Text>
-                </View>
-              )}
-            </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={[styles.emptyCard, SHADOWS.subtle]}>
+            <AlertCircle size={36} color={COLORS.textSecondary} />
+            <Text style={styles.emptyTitle}>No Statement Records Found</Text>
+            <Text style={styles.emptySubtitle}>
+              {searchQuery || typeFilter !== 'ALL' || statusFilter !== 'ALL'
+                ? 'Try clearing your filters or search terms to see all transactions.'
+                : 'Statement records will appear here as rental invoices and payments are generated.'}
+            </Text>
+            {(searchQuery || typeFilter !== 'ALL' || statusFilter !== 'ALL') && (
+              <TouchableOpacity
+                style={styles.clearFilterButton}
+                onPress={() => {
+                  setSearchQuery('');
+                  setTypeFilter('ALL');
+                  setStatusFilter('ALL');
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.clearFilterButtonText}>Reset Filters</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </ScrollView>
+
+      {/* SORTING MODAL */}
+      <Modal
+        visible={showSortModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSortModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowSortModal(false)}
+        >
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Sort Statements</Text>
+              <TouchableOpacity onPress={() => setShowSortModal(false)}>
+                <X size={20} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {(Object.keys(SORT_LABELS) as SortOption[]).map((option) => (
+              <TouchableOpacity
+                key={option}
+                style={[
+                  styles.sortOptionRow,
+                  sortOption === option && styles.sortOptionRowActive,
+                ]}
+                onPress={() => {
+                  setSortOption(option);
+                  setShowSortModal(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.sortOptionText,
+                    sortOption === option && styles.sortOptionTextActive,
+                  ]}
+                >
+                  {SORT_LABELS[option]}
+                </Text>
+                {sortOption === option && <Check size={18} color={COLORS.primary} />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* TRANSACTION DETAIL MODAL */}
+      <Modal
+        visible={!!selectedTransaction}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedTransaction(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setSelectedTransaction(null)}
+        >
+          <View style={styles.detailSheet} onStartShouldSetResponder={() => true}>
+            {selectedTransaction && (
+              <>
+                <View style={styles.detailHeader}>
+                  <View>
+                    <Text style={styles.detailTitle}>{selectedTransaction.refNumber}</Text>
+                    <Text style={styles.detailSub}>
+                      {selectedTransaction.type || 'Statement Entry'}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setSelectedTransaction(null)}>
+                    <X size={22} color={COLORS.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.detailAmountBox}>
+                  <Text style={styles.detailAmountLabel}>Transaction Amount</Text>
+                  <Text
+                    style={[
+                      styles.detailAmountVal,
+                      selectedTransaction.debit > 0
+                        ? { color: '#B45309' }
+                        : { color: '#059669' },
+                    ]}
+                  >
+                    {selectedTransaction.debit > 0
+                      ? `+$${selectedTransaction.debit.toFixed(2)}`
+                      : `-$${selectedTransaction.credit.toFixed(2)}`}
+                  </Text>
+                  <View
+                    style={[
+                      styles.detailStatusBadge,
+                      selectedTransaction.status === 'PAID' || selectedTransaction.status === 'COMPLETED'
+                        ? styles.statusTagPaid
+                        : styles.statusTagPending,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusTagText,
+                        selectedTransaction.status === 'PAID' || selectedTransaction.status === 'COMPLETED'
+                          ? styles.statusTextPaid
+                          : styles.statusTextPending,
+                      ]}
+                    >
+                      Status: {selectedTransaction.status}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.detailInfoList}>
+                  <View style={styles.detailInfoRow}>
+                    <Text style={styles.detailInfoLabel}>Description</Text>
+                    <Text style={styles.detailInfoValue}>{selectedTransaction.description}</Text>
+                  </View>
+
+                  <View style={styles.detailInfoRow}>
+                    <Text style={styles.detailInfoLabel}>Date</Text>
+                    <Text style={styles.detailInfoValue}>
+                      {new Date(selectedTransaction.date).toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailInfoRow}>
+                    <Text style={styles.detailInfoLabel}>Account Balance After</Text>
+                    <Text style={[styles.detailInfoValue, { fontWeight: '800' }]}>
+                      ${selectedTransaction.runningBalance.toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.detailCloseBtn}
+                  onPress={() => setSelectedTransaction(null)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.detailCloseBtnText}>Done</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <BottomNavigation />
     </View>
@@ -505,520 +979,524 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 12,
     paddingBottom: 24,
   },
-  segmentContainer: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    marginBottom: 20,
-  },
-  segmentTab: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  segmentTabActive: {
-    borderBottomColor: COLORS.primary,
-  },
-  segmentText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  segmentTextActive: {
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
-  tabBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  countBadge: {
-    backgroundColor: 'rgba(0, 168, 107, 0.12)',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: RADIUS.full,
-  },
-  countBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  loadingBox: {
-    paddingVertical: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    fontWeight: '500',
-  },
-  pendingSummaryCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: RADIUS.xl,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: 16,
-  },
-  pendingHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 14,
-  },
-  pendingLabel: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  pendingAmountLarge: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: COLORS.text,
-    marginTop: 4,
-  },
-  pendingStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: RADIUS.full,
-    gap: 4,
-  },
-  badgePending: {
-    backgroundColor: '#FEF3C7',
-  },
-  badgePaid: {
-    backgroundColor: '#D1FAE5',
-  },
-  textPending: {
-    color: '#D97706',
-    fontWeight: '700',
-  },
-  textPaid: {
-    color: '#059669',
-    fontWeight: '700',
-  },
-  pendingStatusText: {
-    fontSize: 12,
-  },
-  pendingMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  pendingMetaText: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  boldText: {
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  breakdownCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: RADIUS.xl,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.text,
-    marginBottom: 16,
-  },
-  breakdownRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  breakdownLabel: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  breakdownValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginVertical: 12,
-  },
-  breakdownTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  totalLabel: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-  totalAmount: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-  pendingInvoicesCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: RADIUS.xl,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: 16,
-  },
-  invoicesHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  invoiceCountChip: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: RADIUS.full,
-  },
-  invoiceCountChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#D97706',
-  },
-  invoiceItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  borderBottom: {
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  invoiceIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: '#FEF3C7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  invoiceInfo: {
-    flex: 1,
-  },
-  invoiceNumber: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  invoiceDesc: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  invoiceDueDate: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  invoiceAmountCol: {
-    alignItems: 'flex-end',
-  },
-  invoiceAmountText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-  pendingMiniBadge: {
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: RADIUS.sm,
-    marginTop: 3,
-  },
-  pendingMiniBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#EF4444',
-  },
-  yappyCard: {
+  summaryCard: {
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.xl,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#BAE6FD',
+    borderColor: '#E2E8F0',
     marginBottom: 16,
   },
-  yappyHeaderRow: {
+  summaryTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
+    alignItems: 'flex-start',
+    marginBottom: 16,
   },
-  yappyTitleGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  customerMetaCol: {
+    flex: 1,
+    marginRight: 10,
   },
-  yappyIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#0284C7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  yappyIconText: {
-    color: COLORS.white,
-    fontSize: 20,
-    fontWeight: '900',
-    fontStyle: 'italic',
-  },
-  yappyTitle: {
-    fontSize: 15,
+  customerName: {
+    fontSize: 18,
     fontWeight: '800',
     color: COLORS.text,
+    letterSpacing: -0.2,
   },
-  yappySubtitle: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 1,
+  idBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
   },
-  yappyActiveBadge: {
+  idChip: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+  },
+  idChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  vehicleChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: RADIUS.full,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
   },
-  yappyActiveText: {
+  vehicleChipText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#059669',
+    color: '#334155',
   },
-  yappyInfoBox: {
-    backgroundColor: '#F0F9FF',
-    borderRadius: RADIUS.lg,
-    padding: 12,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#E0F2FE',
-  },
-  yappyInfoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  yappyLabel: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  yappyValueBold: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0369A1',
-  },
-  yappyValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  yappyPayActionBtn: {
-    backgroundColor: '#0284C7',
-    borderRadius: RADIUS.md,
-    paddingVertical: 12,
+  refreshIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#E8F5E9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  yappyPayActionText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  statementSection: {
-    marginBottom: 20,
-  },
-  statementMetricsCard: {
+  metricsRow: {
     flexDirection: 'row',
-    backgroundColor: COLORS.white,
-    borderRadius: RADIUS.xl,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: RADIUS.lg,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: 18,
+    borderColor: '#EEF2F6',
     justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  metricItem: {
+  metricCard: {
     flex: 1,
     alignItems: 'center',
   },
   metricDivider: {
     width: 1,
-    height: '80%',
-    backgroundColor: COLORS.border,
+    height: '75%',
+    backgroundColor: '#E2E8F0',
     alignSelf: 'center',
   },
   metricLabel: {
     fontSize: 11,
     color: COLORS.textSecondary,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 3,
     textAlign: 'center',
   },
-  metricValue: {
+  metricVal: {
     fontSize: 15,
     fontWeight: '800',
     color: COLORS.text,
     textAlign: 'center',
   },
-  statementHeaderRow: {
+  downloadPdfButton: {
+    backgroundColor: COLORS.primary,
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+    borderRadius: RADIUS.lg,
+    gap: 8,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  downloadPdfButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  btnDisabled: {
+    opacity: 0.7,
+  },
+  controlsSection: {
+    marginBottom: 14,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 10,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.text,
+    padding: 0,
+  },
+  filterSortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    gap: 8,
   },
-  refreshBtn: {
+  filterPillsScroll: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    gap: 6,
+    paddingVertical: 2,
   },
-  refreshBtnText: {
-    fontSize: 12,
+  filterPill: {
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  filterPillActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  filterPillActiveEmerald: {
+    backgroundColor: '#D1FAE5',
+    borderColor: '#059669',
+  },
+  filterPillActiveAmber: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#D97706',
+  },
+  filterPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  filterPillTextActive: {
+    color: COLORS.white,
+    fontWeight: '700',
+  },
+  filterPillTextActiveEmerald: {
+    color: '#065F46',
+    fontWeight: '700',
+  },
+  filterPillTextActiveAmber: {
+    color: '#92400E',
+    fontWeight: '700',
+  },
+  pillSeparator: {
+    width: 1,
+    height: 16,
+    backgroundColor: '#CBD5E1',
+    marginHorizontal: 2,
+  },
+  sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  sortButtonText: {
+    fontSize: 11,
     fontWeight: '700',
     color: COLORS.primary,
   },
-  statementListCard: {
+  listHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 2,
+  },
+  listHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.text,
+    letterSpacing: -0.2,
+  },
+  listHeaderCount: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  statementCard: {
     backgroundColor: COLORS.white,
     borderRadius: RADIUS.xl,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 16,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
   },
-  statementItem: {
-    paddingVertical: 14,
+  statementRow: {
+    paddingVertical: 13,
   },
-  itemTopRow: {
+  rowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  rowMain: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 6,
   },
-  itemTypeGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  itemIconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  typeIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 10,
+    marginTop: 2,
   },
-  iconInvoice: {
+  iconBoxInvoice: {
     backgroundColor: '#FEF3C7',
   },
-  iconPayment: {
+  iconBoxPayment: {
     backgroundColor: '#D1FAE5',
   },
-  iconCredit: {
+  iconBoxCredit: {
     backgroundColor: '#EDE9FE',
   },
-  itemRefNumber: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  itemDate: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 1,
-  },
-  amountCol: {
-    alignItems: 'flex-end',
-  },
-  debitAmount: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#B45309',
-  },
-  creditAmount: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#059669',
-  },
-  creditNoteAmount: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#7C3AED',
-  },
-  statusBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: RADIUS.sm,
-    marginTop: 3,
-  },
-  statusBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  itemBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-    paddingLeft: 44,
-  },
-  itemDesc: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
+  rowTextCol: {
     flex: 1,
     marginRight: 8,
   },
-  runningBalanceText: {
+  refRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  refNumber: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  statusTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  statusTagPaid: {
+    backgroundColor: '#D1FAE5',
+  },
+  statusTagPending: {
+    backgroundColor: '#FEF3C7',
+  },
+  statusTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  statusTextPaid: {
+    color: '#065F46',
+  },
+  statusTextPending: {
+    color: '#92400E',
+  },
+  itemDescription: {
     fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 2,
+  },
+  itemDate: {
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  rowAmountCol: {
+    alignItems: 'flex-end',
+  },
+  debitText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  creditText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  creditNoteText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#7C3AED',
+  },
+  balancePill: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#EEF2F6',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+    marginTop: 4,
+  },
+  balancePillText: {
+    fontSize: 10,
     fontWeight: '700',
     color: COLORS.text,
   },
-  emptyState: {
+  loadingBox: {
     paddingVertical: 40,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  emptyCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.xl,
+    paddingVertical: 36,
     paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   emptyTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     color: COLORS.text,
     marginTop: 12,
     marginBottom: 6,
   },
-  emptyText: {
-    fontSize: 13,
+  emptySubtitle: {
+    fontSize: 12,
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 18,
+    marginBottom: 16,
+  },
+  clearFilterButton: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: RADIUS.full,
+  },
+  clearFilterButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  sortOptionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  sortOptionRowActive: {
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 10,
+    borderRadius: RADIUS.md,
+  },
+  sortOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  sortOptionTextActive: {
+    color: COLORS.primary,
+    fontWeight: '800',
+  },
+  detailSheet: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    padding: 22,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  detailTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  detailSub: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  detailAmountBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: RADIUS.lg,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#EEF2F6',
+    marginBottom: 16,
+  },
+  detailAmountLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+  },
+  detailAmountVal: {
+    fontSize: 26,
+    fontWeight: '900',
+    marginVertical: 4,
+  },
+  detailStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+    marginTop: 2,
+  },
+  detailInfoList: {
+    marginBottom: 20,
+  },
+  detailInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  detailInfoLabel: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  detailInfoValue: {
+    fontSize: 13,
+    color: COLORS.text,
+    fontWeight: '600',
+    maxWidth: '65%',
+    textAlign: 'right',
+  },
+  detailCloseBtn: {
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.lg,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  detailCloseBtnText: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: '800',
   },
 });

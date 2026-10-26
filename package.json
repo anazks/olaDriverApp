@@ -6,6 +6,8 @@
     "@expo/vector-icons": "^15.0.2",
     "axios": "^1.20.0",
     "expo": "~57.0.25",
+    "expo-print": "~57.0.2",
+    "expo-sharing": "~57.0.24",
     "expo-status-bar": "~57.0.1",
     "lucide-react-native": "^1.48.0",
     "react": "19.2.3",

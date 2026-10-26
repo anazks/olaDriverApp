@@ -10,6 +10,8 @@ export const INITIAL_DRIVER: Driver = {
   lastName: '',
   driverId: '',
   verified: false,
+  status: 'ACTIVE',
+  isActive: true,
   email: '',
   phone: '',
   address: '',

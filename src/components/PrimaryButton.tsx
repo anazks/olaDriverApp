@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   ViewStyle,
   TextStyle,
+  StyleProp,
 } from 'react-native';
 import { COLORS, RADIUS } from '../constants/theme';
 
@@ -15,8 +16,8 @@ interface PrimaryButtonProps {
   loading?: boolean;
   disabled?: boolean;
   variant?: 'green' | 'dark' | 'danger';
-  style?: ViewStyle;
-  textStyle?: TextStyle;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
   icon?: React.ReactNode;
 }
 
