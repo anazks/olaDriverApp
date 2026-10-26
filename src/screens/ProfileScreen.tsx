@@ -29,7 +29,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const ProfileScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
-  const { driver, navigate, logout, showToast } = useApp();
+  const { driver, paymentMethods, navigate, logout, showToast } = useApp();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   return (
@@ -56,17 +56,23 @@ export const ProfileScreen: React.FC = () => {
         {/* DRIVER INFO SECTION */}
         <View style={styles.profileHeaderCard}>
           <View style={styles.avatarContainer}>
-            <Image
-              source={{ uri: driver.avatarUrl }}
-              style={styles.avatar}
-            />
+            {driver.avatarUrl ? (
+              <Image
+                source={{ uri: driver.avatarUrl }}
+                style={styles.avatar}
+              />
+            ) : (
+              <View style={[styles.avatar, { backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
+                <User size={36} color={COLORS.textSecondary} />
+              </View>
+            )}
           </View>
 
-          <Text style={styles.driverName}>{driver.name}</Text>
+          <Text style={styles.driverName}>{driver.name || 'Driver'}</Text>
 
           <View style={styles.badgesRow}>
-            <StatusBadge label="Verified" variant="verified" />
-            <Text style={styles.driverId}>ID: {driver.driverId}</Text>
+            <StatusBadge label={driver.verified ? "Verified" : "Active"} variant="verified" />
+            {driver.driverId ? <Text style={styles.driverId}>ID: {driver.driverId}</Text> : null}
           </View>
         </View>
 
@@ -81,22 +87,22 @@ export const ProfileScreen: React.FC = () => {
             icon={<Phone size={20} color={COLORS.primary} />}
             label="Contact Details"
             badge={
-              <Text style={styles.menuValueText}>{driver.phone}</Text>
+              <Text style={styles.menuValueText}>{driver.phone || 'Not set'}</Text>
             }
             onPress={() => navigate('EditProfile')}
           />
           <ProfileMenuItem
             icon={<FileBadge size={20} color={COLORS.primary} />}
             label="Driving License"
-            badge={<StatusBadge label="Verified" variant="verified" size="sm" />}
-            onPress={() => showToast('License No: DL-8849204 (Valid till 2029)')}
+            badge={<StatusBadge label={driver.verified ? "Verified" : "Active"} variant="verified" size="sm" />}
+            onPress={() => showToast(driver.driverId ? `Driver ID: ${driver.driverId}` : 'License Verified')}
           />
           <ProfileMenuItem
             icon={<CreditCard size={20} color={COLORS.primary} />}
             label="Payment Methods"
             badge={
               <View style={styles.cardBadge}>
-                <Text style={styles.cardBadgeText}>2 Cards</Text>
+                <Text style={styles.cardBadgeText}>{paymentMethods.length > 0 ? `${paymentMethods.length} Saved` : 'Add'}</Text>
               </View>
             }
             onPress={() => navigate('Payments')}
@@ -104,13 +110,13 @@ export const ProfileScreen: React.FC = () => {
           <ProfileMenuItem
             icon={<MapPin size={20} color={COLORS.primary} />}
             label="Address"
-            onPress={() => showToast(driver.address)}
+            onPress={() => showToast(driver.address || 'No address on file')}
           />
           <ProfileMenuItem
             icon={<HeartHandshake size={20} color={COLORS.primary} />}
             label="Emergency Contact"
             isLast
-            onPress={() => showToast(`Emergency: ${driver.emergencyContact}`)}
+            onPress={() => showToast(driver.emergencyContact ? `Emergency: ${driver.emergencyContact}` : 'No emergency contact on file')}
           />
         </View>
 

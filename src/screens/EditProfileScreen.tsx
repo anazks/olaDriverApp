@@ -93,7 +93,7 @@ export const EditProfileScreen: React.FC = () => {
             <View style={{ flex: 1 }}>
               <InputField
                 label="First Name"
-                placeholder="Carlos"
+                placeholder="First Name"
                 value={firstName}
                 onChangeText={setFirstName}
                 leftIcon={<User size={18} color={COLORS.textSecondary} />}
@@ -102,7 +102,7 @@ export const EditProfileScreen: React.FC = () => {
             <View style={{ flex: 1 }}>
               <InputField
                 label="Last Name"
-                placeholder="Mendoza"
+                placeholder="Last Name"
                 value={lastName}
                 onChangeText={setLastName}
               />
@@ -111,7 +111,7 @@ export const EditProfileScreen: React.FC = () => {
 
           <InputField
             label="Phone Number"
-            placeholder="+507 6000-1234"
+            placeholder="Phone number"
             value={phone}
             onChangeText={setPhone}
             leftIcon={<Phone size={18} color={COLORS.textSecondary} />}
@@ -120,7 +120,7 @@ export const EditProfileScreen: React.FC = () => {
 
           <InputField
             label="Email Address"
-            placeholder="carlos@example.com"
+            placeholder="driver@example.com"
             value={email}
             onChangeText={setEmail}
             leftIcon={<Mail size={18} color={COLORS.textSecondary} />}

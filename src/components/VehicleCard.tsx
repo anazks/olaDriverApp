@@ -11,6 +11,32 @@ interface VehicleCardProps {
 }
 
 export const VehicleCard: React.FC<VehicleCardProps> = ({ vehicle, onPress }) => {
+  const hasVehicle = Boolean(vehicle?.plateNumber || vehicle?.make || vehicle?.model);
+
+  if (!hasVehicle) {
+    return (
+      <TouchableOpacity
+        style={[styles.card, SHADOWS.card]}
+        onPress={onPress}
+        activeOpacity={0.8}
+      >
+        <View style={styles.topInfo}>
+          <View style={styles.textContainer}>
+            <Text style={styles.makeModel}>No Vehicle Assigned</Text>
+            <Text style={styles.variant}>Assigned vehicle will appear once allocated by fleet manager</Text>
+          </View>
+          <View style={styles.arrowContainer}>
+            <ChevronRight size={18} color={COLORS.textSecondary} strokeWidth={2.5} />
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
+  const currentMileage = vehicle.currentMileage || 0;
+  const nextService = vehicle.nextService || 0;
+  const remainingService = Math.max(0, nextService - currentMileage);
+
   return (
     <TouchableOpacity
       style={[styles.card, SHADOWS.card]}
@@ -23,14 +49,16 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({ vehicle, onPress }) =>
             {vehicle.make} {vehicle.model}
           </Text>
           <Text style={styles.variant}>
-            {vehicle.variant} • {vehicle.year}
+            {vehicle.variant ? `${vehicle.variant} • ` : ''}{vehicle.year || ''}
           </Text>
 
           <View style={styles.badgeRow}>
-            <StatusBadge label={vehicle.status} variant="success" size="sm" />
-            <View style={styles.plateTag}>
-              <Text style={styles.plateText}>{vehicle.plateNumber}</Text>
-            </View>
+            <StatusBadge label={vehicle.status || 'Active'} variant="success" size="sm" />
+            {vehicle.plateNumber ? (
+              <View style={styles.plateTag}>
+                <Text style={styles.plateText}>{vehicle.plateNumber}</Text>
+              </View>
+            ) : null}
             {vehicle.fleetNumber ? (
               <View style={styles.fleetTag}>
                 <Text style={styles.fleetText}>{vehicle.fleetNumber}</Text>
@@ -49,19 +77,19 @@ export const VehicleCard: React.FC<VehicleCardProps> = ({ vehicle, onPress }) =>
         <View style={styles.specItem}>
           <Gauge size={14} color={COLORS.textSecondary} strokeWidth={2} />
           <Text style={styles.specText}>
-            {vehicle.currentMileage.toLocaleString()} km
+            {currentMileage.toLocaleString()} km
           </Text>
         </View>
         <View style={styles.specDivider} />
         <View style={styles.specItem}>
           <Fuel size={14} color={COLORS.textSecondary} strokeWidth={2} />
-          <Text style={styles.specText}>{vehicle.fuelType}</Text>
+          <Text style={styles.specText}>{vehicle.fuelType || 'N/A'}</Text>
         </View>
         <View style={styles.specDivider} />
         <View style={styles.specItem}>
           <Text style={styles.specMuted}>Service in </Text>
           <Text style={styles.specHighlight}>
-            {(vehicle.nextService - vehicle.currentMileage).toLocaleString()} km
+            {remainingService.toLocaleString()} km
           </Text>
         </View>
       </View>

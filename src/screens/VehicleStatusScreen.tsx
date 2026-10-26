@@ -74,51 +74,14 @@ export const VehicleStatusScreen: React.FC = () => {
     };
   }, [vehicle?.plateNumber, vehicle?.id]);
 
-  const currentMileage = vehicle?.currentMileage || 18450;
-  const nextService = vehicle?.nextService || 23450;
+  const currentMileage = vehicle?.currentMileage || 0;
+  const nextService = vehicle?.nextService || 0;
   const remainingKm = Math.max(0, nextService - currentMileage);
   const serviceInterval = 5000;
-  const progressRatio = Math.min(1, Math.max(0, (serviceInterval - remainingKm) / serviceInterval));
+  const progressRatio = nextService > 0 ? Math.min(1, Math.max(0, (serviceInterval - remainingKm) / serviceInterval)) : 0;
   const progressPercent = Math.round(progressRatio * 100);
 
-  const documents: VehicleDocument[] = vehicle?.documents || [
-    {
-      id: 'doc_reg_fb',
-      title: 'Registration Certificate (Registro Único)',
-      type: 'REGISTRATION',
-      docNumber: `RUV-${vehicle.plateNumber}-PAN`,
-      expiryDate: '2027-04-28T10:00:00.000Z',
-      status: 'Valid',
-      issuer: 'Autoridad del Tránsito y Transporte Terrestre (ATTT)',
-    },
-    {
-      id: 'doc_tax_fb',
-      title: 'Municipal Road Tax & Sticker (Placa / Calcomanía)',
-      type: 'ROAD_TAX',
-      docNumber: `TAX-${vehicle.plateNumber}`,
-      expiryDate: '2027-03-29T10:00:00.000Z',
-      status: 'Valid',
-      issuer: 'Municipio de Panamá',
-    },
-    {
-      id: 'doc_rev_fb',
-      title: 'Mechanical Inspection (Revisado Vehicular)',
-      type: 'ROADWORTHINESS',
-      docNumber: `REV-${vehicle.plateNumber}-2026`,
-      expiryDate: '2027-02-27T10:00:00.000Z',
-      status: 'Valid',
-      issuer: 'Centro Técnico de Revisado Autorizado',
-    },
-    {
-      id: 'doc_ins_fb',
-      title: 'Commercial Fleet Insurance Certificate',
-      type: 'INSURANCE',
-      docNumber: vehicle?.insurance?.policyNumber || 'POL-OLA-2026-0941',
-      expiryDate: vehicle?.insurance?.expiryDate || '2027-07-27T10:00:00.000Z',
-      status: 'Valid',
-      issuer: vehicle?.insurance?.provider || 'ASSA Compañía de Seguros, S.A.',
-    },
-  ];
+  const documents: VehicleDocument[] = vehicle?.documents || [];
 
   const handleOpenDoc = (doc: VehicleDocument) => {
     setSelectedDoc(doc);
@@ -167,17 +130,17 @@ export const VehicleStatusScreen: React.FC = () => {
             <View style={styles.highlightPillsRow}>
               <View style={styles.pillItem}>
                 <Text style={styles.pillLabel}>PLATE</Text>
-                <Text style={styles.pillValue}>{vehicle.plateNumber}</Text>
+                <Text style={styles.pillValue}>{vehicle.plateNumber || 'N/A'}</Text>
               </View>
               <View style={styles.pillDivider} />
               <View style={styles.pillItem}>
                 <Text style={styles.pillLabel}>FLEET NO</Text>
-                <Text style={styles.pillValue}>{vehicle.fleetNumber || 'FL-101'}</Text>
+                <Text style={styles.pillValue}>{vehicle.fleetNumber || 'N/A'}</Text>
               </View>
               <View style={styles.pillDivider} />
               <View style={styles.pillItem}>
                 <Text style={styles.pillLabel}>FUEL</Text>
-                <Text style={styles.pillValue}>{vehicle.fuelType}</Text>
+                <Text style={styles.pillValue}>{vehicle.fuelType || 'N/A'}</Text>
               </View>
             </View>
           </View>
@@ -274,7 +237,7 @@ export const VehicleStatusScreen: React.FC = () => {
                   <Text style={styles.infoLabel}>Engine Number</Text>
                 </View>
                 <Text style={styles.infoValueMono}>
-                  {vehicle.engineNumber || 'ENG-4B11-9238'}
+                  {vehicle.engineNumber || 'N/A'}
                 </Text>
               </View>
 
@@ -284,7 +247,7 @@ export const VehicleStatusScreen: React.FC = () => {
                   <Text style={styles.infoLabel}>Exterior Colour</Text>
                 </View>
                 <Text style={styles.infoValue}>
-                  {vehicle.colour || 'Silver Metallic'}
+                  {vehicle.colour || 'N/A'}
                 </Text>
               </View>
 
@@ -322,7 +285,7 @@ export const VehicleStatusScreen: React.FC = () => {
                   <Text style={styles.infoLabel}>Assigned Hub / Branch</Text>
                 </View>
                 <Text style={styles.infoValueBold}>
-                  {vehicle.branch || 'Panama City Central'}
+                  {vehicle.branch || 'Main Depot'}
                 </Text>
               </View>
             </View>
@@ -346,105 +309,107 @@ export const VehicleStatusScreen: React.FC = () => {
             </View>
 
             {/* DOCUMENT CARDS LIST */}
-            {documents.map((doc) => (
-              <TouchableOpacity
-                key={doc.id}
-                style={[styles.documentCard, SHADOWS.subtle]}
-                activeOpacity={0.7}
-                onPress={() => handleOpenDoc(doc)}
-              >
-                <View style={styles.docCardTop}>
-                  <View style={styles.docTypeIconCircle}>
-                    <FileText size={20} color={COLORS.primary} />
-                  </View>
-                  <View style={styles.docHeaderInfo}>
-                    <Text style={styles.docTitle}>{doc.title}</Text>
-                    <Text style={styles.docNumber}>Doc #: {doc.docNumber}</Text>
-                  </View>
-                  <View style={styles.docValidBadge}>
-                    <Text style={styles.docValidBadgeText}>
-                      {doc.status || 'Valid'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.docDivider} />
-
-                <View style={styles.docCardBottom}>
-                  <View style={styles.docMetaItem}>
-                    <Calendar size={13} color={COLORS.textSecondary} />
-                    <Text style={styles.docMetaText}>
-                      Exp:{' '}
-                      <Text style={styles.docMetaHighlight}>
-                        {doc.expiryDate
-                          ? new Date(doc.expiryDate).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                            })
-                          : 'Valid'}
+            {documents.length > 0 ? (
+              documents.map((doc) => (
+                <TouchableOpacity
+                  key={doc.id}
+                  style={[styles.documentCard, SHADOWS.subtle]}
+                  activeOpacity={0.7}
+                  onPress={() => handleOpenDoc(doc)}
+                >
+                  <View style={styles.docCardTop}>
+                    <View style={styles.docTypeIconCircle}>
+                      <FileText size={20} color={COLORS.primary} />
+                    </View>
+                    <View style={styles.docHeaderInfo}>
+                      <Text style={styles.docTitle}>{doc.title}</Text>
+                      <Text style={styles.docNumber}>Doc #: {doc.docNumber}</Text>
+                    </View>
+                    <View style={styles.docValidBadge}>
+                      <Text style={styles.docValidBadgeText}>
+                        {doc.status || 'Valid'}
                       </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.docDivider} />
+
+                  <View style={styles.docCardBottom}>
+                    <View style={styles.docMetaItem}>
+                      <Calendar size={13} color={COLORS.textSecondary} />
+                      <Text style={styles.docMetaText}>
+                        Exp:{' '}
+                        <Text style={styles.docMetaHighlight}>
+                          {doc.expiryDate
+                            ? new Date(doc.expiryDate).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })
+                            : 'Valid'}
+                        </Text>
+                      </Text>
+                    </View>
+
+                    <View style={styles.docActionGroup}>
+                      <TouchableOpacity
+                        style={styles.viewDocBtn}
+                        onPress={() => handleOpenDoc(doc)}
+                      >
+                        <Eye size={14} color={COLORS.primary} />
+                        <Text style={styles.viewDocBtnText}>View</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.downloadIconBtn}
+                        onPress={() => handleDownloadDoc(doc)}
+                      >
+                        <Download size={14} color={COLORS.textSecondary} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View style={[styles.infoCard, { alignItems: 'center', paddingVertical: 28 }]}>
+                <FileText size={36} color={COLORS.textSecondary} />
+                <Text style={{ marginTop: 10, fontSize: 14, color: COLORS.textSecondary }}>
+                  No vehicle documents currently on file.
+                </Text>
+              </View>
+            )}
+
+            {/* COMMERCIAL INSURANCE DETAILS CARD (ONLY WHEN PRESENT) */}
+            {vehicle.insurance?.policyNumber && (
+              <View style={[styles.insuranceCard, SHADOWS.subtle]}>
+                <View style={styles.insuranceHeader}>
+                  <View>
+                    <Text style={styles.cardHeader}>Commercial Fleet Insurance</Text>
+                    <Text style={styles.cardSubHeader}>
+                      {vehicle.insurance?.provider || 'Fleet Policy'}
                     </Text>
                   </View>
-
-                  <View style={styles.docActionGroup}>
-                    <TouchableOpacity
-                      style={styles.viewDocBtn}
-                      onPress={() => handleOpenDoc(doc)}
-                    >
-                      <Eye size={14} color={COLORS.primary} />
-                      <Text style={styles.viewDocBtnText}>View</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.downloadIconBtn}
-                      onPress={() => handleDownloadDoc(doc)}
-                    >
-                      <Download size={14} color={COLORS.textSecondary} />
-                    </TouchableOpacity>
+                  <View style={styles.insuranceBadge}>
+                    <Text style={styles.insuranceBadgeText}>ACTIVE POLICY</Text>
                   </View>
                 </View>
-              </TouchableOpacity>
-            ))}
 
-            {/* COMMERCIAL INSURANCE DETAILS CARD */}
-            <View style={[styles.insuranceCard, SHADOWS.subtle]}>
-              <View style={styles.insuranceHeader}>
-                <View>
-                  <Text style={styles.cardHeader}>Commercial Fleet Insurance</Text>
-                  <Text style={styles.cardSubHeader}>
-                    {vehicle.insurance?.provider || 'ASSA Compañía de Seguros, S.A.'}
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Policy Number</Text>
+                  <Text style={styles.infoValueMono}>
+                    {vehicle.insurance?.policyNumber}
                   </Text>
                 </View>
-                <View style={styles.insuranceBadge}>
-                  <Text style={styles.insuranceBadgeText}>ACTIVE POLICY</Text>
-                </View>
-              </View>
 
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Policy Number</Text>
-                <Text style={styles.infoValueMono}>
-                  {vehicle.insurance?.policyNumber || 'POL-OLA-2026-0941'}
-                </Text>
+                {vehicle.insurance?.coverageType && (
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Coverage Level</Text>
+                    <Text style={styles.infoValue}>
+                      {vehicle.insurance.coverageType}
+                    </Text>
+                  </View>
+                )}
               </View>
-
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Coverage Level</Text>
-                <Text style={styles.infoValue}>
-                  {vehicle.insurance?.coverageType || 'Full Comprehensive Fleet'}
-                </Text>
-              </View>
-
-              <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
-                <Text style={styles.infoLabel}>24/7 Policy Emergency Phone</Text>
-                <TouchableOpacity
-                  onPress={() => Linking.openURL('tel:+5078002772')}
-                  style={styles.callSupportRow}
-                >
-                  <Phone size={14} color={COLORS.primary} />
-                  <Text style={styles.phoneHighlight}>+507 800-2772</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            )}
           </View>
         )}
 

@@ -39,6 +39,7 @@ export const PaymentsScreen: React.FC = () => {
     navigate,
     showToast,
     activeProfile,
+    driver,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'statement'>('overview');
@@ -326,7 +327,7 @@ export const PaymentsScreen: React.FC = () => {
                 <View style={styles.yappyInfoRow}>
                   <Text style={styles.yappyLabel}>Registered Phone</Text>
                   <Text style={styles.yappyValue}>
-                    {activeProfile?.phone || '+507 6234-5678'}
+                    {activeProfile?.phone || driver.phone || 'On file'}
                   </Text>
                 </View>
               </View>

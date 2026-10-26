@@ -93,15 +93,21 @@ export const SideMenu: React.FC = () => {
               onPress={() => handleNavigate('Profile')}
               activeOpacity={0.8}
             >
-              <Image
-                source={{ uri: driver.avatarUrl }}
-                style={styles.avatar}
-              />
+              {driver.avatarUrl ? (
+                <Image
+                  source={{ uri: driver.avatarUrl }}
+                  style={styles.avatar}
+                />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
+                  <User size={24} color={COLORS.textSecondary} />
+                </View>
+              )}
               <View style={styles.profileText}>
-                <Text style={styles.driverName}>{driver.name}</Text>
-                <Text style={styles.driverId}>ID: {driver.driverId}</Text>
+                <Text style={styles.driverName}>{driver.name || 'Driver'}</Text>
+                {driver.driverId ? <Text style={styles.driverId}>ID: {driver.driverId}</Text> : null}
                 <View style={styles.badgeRow}>
-                  <StatusBadge label="Verified" variant="verified" size="sm" />
+                  <StatusBadge label={driver.verified ? "Verified" : "Active"} variant="verified" size="sm" />
                 </View>
               </View>
             </TouchableOpacity>

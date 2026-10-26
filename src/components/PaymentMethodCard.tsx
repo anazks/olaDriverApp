@@ -17,8 +17,8 @@ interface PaymentMethodCardProps {
 
 export const PaymentMethodCard: React.FC<PaymentMethodCardProps> = ({
   type,
-  last4 = '4242',
-  email = 'carlos@example.com',
+  last4 = '',
+  email = '',
   isDefault = false,
   selected = false,
   onPress,

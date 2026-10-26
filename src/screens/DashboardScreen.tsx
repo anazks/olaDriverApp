@@ -26,6 +26,7 @@ import {
   Layers,
   ChevronRight,
   Check,
+  User,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -96,10 +97,12 @@ export const DashboardScreen: React.FC = () => {
             <View style={styles.greetingInfo}>
               <Text style={styles.greetingPre}>Good to see you on the road,</Text>
               <Text style={styles.greetingName} numberOfLines={1}>
-                Hi, {driver.firstName} 👋
+                Hi, {driver.firstName || driver.name || 'Driver'} 👋
               </Text>
               <Text style={styles.vehicleSub} numberOfLines={1}>
-                {vehicle.make} {vehicle.model} • {vehicle.plateNumber}
+                {vehicle?.plateNumber
+                  ? `${vehicle.make || ''} ${vehicle.model || ''} • ${vehicle.plateNumber}`.trim()
+                  : 'No vehicle assigned'}
               </Text>
             </View>
 
@@ -108,10 +111,16 @@ export const DashboardScreen: React.FC = () => {
               activeOpacity={0.8}
               style={styles.avatarContainer}
             >
-              <Image
-                source={{ uri: driver.avatarUrl }}
-                style={styles.avatarImg}
-              />
+              {driver.avatarUrl ? (
+                <Image
+                  source={{ uri: driver.avatarUrl }}
+                  style={styles.avatarImg}
+                />
+              ) : (
+                <View style={[styles.avatarImg, { backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }]}>
+                  <User size={26} color={COLORS.textSecondary} />
+                </View>
+              )}
               <View style={styles.statusPulseDot} />
             </TouchableOpacity>
           </View>
@@ -199,13 +208,19 @@ export const DashboardScreen: React.FC = () => {
         </View>
 
         <View style={[styles.recentActivitiesCard, SHADOWS.subtle]}>
-          {recentActivities.map((act, index) => (
-            <ActivityItem
-              key={act.id}
-              activity={act}
-              isLast={index === recentActivities.length - 1}
-            />
-          ))}
+          {recentActivities.length > 0 ? (
+            recentActivities.map((act, index) => (
+              <ActivityItem
+                key={act.id}
+                activity={act}
+                isLast={index === recentActivities.length - 1}
+              />
+            ))
+          ) : (
+            <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, color: COLORS.textSecondary }}>No recent activities</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 

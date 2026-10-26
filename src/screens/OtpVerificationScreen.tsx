@@ -108,10 +108,10 @@ export const OtpVerificationScreen: React.FC = () => {
     setError(null);
     setOtp(['', '', '', '', '', '']);
     try {
-      await requestOtp(pendingEmail || 'driver@olacars.com');
+      await requestOtp(pendingEmail || '');
       showToast('New verification code sent to your email');
     } catch (err: any) {
-      showToast(err.message || 'New 6-digit code: 123456');
+      showToast(err.message || 'Failed to resend code');
     }
     inputRefs[0].current?.focus();
   };
@@ -128,7 +128,7 @@ export const OtpVerificationScreen: React.FC = () => {
     setLoading(true);
 
     try {
-      const res = await verifyOtpAndLogin(pendingEmail || 'driver@olacars.com', enteredCode);
+      const res = await verifyOtpAndLogin(pendingEmail || '', enteredCode);
       if (res.profiles && res.profiles.length > 1) {
         setAvailableProfiles(res.profiles);
         setShowProfileSelector(true);
@@ -136,16 +136,10 @@ export const OtpVerificationScreen: React.FC = () => {
       } else {
         showToast('Verification successful! Welcome to OlaCars.');
         const primary = (res.profiles && res.profiles[0]) || res.activeProfile || res.driver;
-        login(pendingEmail || 'driver@olacars.com', primary, res.profiles);
+        login(pendingEmail || '', primary, res.profiles);
       }
     } catch (err: any) {
-      // In dev fallback or if demo code 123456 / 1234 is used
-      if (enteredCode === '123456' || enteredCode === '1234') {
-        showToast('Signed in successfully! (Dev Mode)');
-        login(pendingEmail || 'driver@olacars.com');
-      } else {
-        setError(err.message || 'Invalid verification code');
-      }
+      setError(err.message || 'Invalid verification code');
     } finally {
       setLoading(false);
     }
@@ -253,7 +247,7 @@ export const OtpVerificationScreen: React.FC = () => {
           {/* DEMO HINT */}
           <View style={styles.demoHintRow}>
             <CheckCircle2 size={14} color={COLORS.textSecondary} />
-            <Text style={styles.demoHintText}>Tip: Enter the 6-digit code from your email (or 123456)</Text>
+            <Text style={styles.demoHintText}>Enter the 6-digit verification code sent to your email</Text>
           </View>
 
           {/* 5. VERIFY BUTTON */}

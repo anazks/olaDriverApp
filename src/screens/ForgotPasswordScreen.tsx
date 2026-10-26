@@ -21,8 +21,8 @@ export const ForgotPasswordScreen: React.FC = () => {
   const { goBack, navigate, showToast } = useApp();
 
   const [step, setStep] = useState<'request' | 'otp' | 'reset'>('request');
-  const [identifier, setIdentifier] = useState('carlos@example.com');
-  const [otp, setOtp] = useState(['1', '2', '3', '4']);
+  const [identifier, setIdentifier] = useState('');
+  const [otp, setOtp] = useState(['', '', '', '']);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -38,7 +38,7 @@ export const ForgotPasswordScreen: React.FC = () => {
     setTimeout(() => {
       setLoading(false);
       setStep('otp');
-      showToast('Verification code sent: 1234');
+      showToast('Verification code sent to your email');
     }, 800);
   };
 

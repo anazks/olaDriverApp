@@ -68,35 +68,61 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [activeBottomTab, setActiveBottomTab] = useState<BottomTabKey>('Home');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [pendingEmail, setPendingEmail] = useState<string>('carlos@example.com');
+  const [pendingEmail, setPendingEmail] = useState<string>('');
   const [profiles, setProfiles] = useState<CustomerProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState<CustomerProfile | null>(null);
 
-  const applyProfile = (prof: CustomerProfile) => {
+  const applyProfile = (prof: any) => {
     setActiveProfile(prof);
     // Update Driver state
-    const parts = (prof.name || 'Driver').split(' ');
+    const fullName = prof.name || prof.fullName || '';
+    const parts = fullName.split(' ');
     setDriver((prev) => ({
       ...prev,
-      name: prof.name || prev.name,
-      firstName: parts[0] || prev.firstName,
-      lastName: parts.slice(1).join(' ') || prev.lastName,
+      name: fullName || prev.name,
+      firstName: prof.firstName || parts[0] || prev.firstName,
+      lastName: prof.lastName || parts.slice(1).join(' ') || prev.lastName,
       email: prof.email || prev.email,
       phone: prof.phone || prev.phone,
-      driverId: prof.customerId || prev.driverId,
+      driverId: prof.customerId || prof.driverCode || prof.id || prev.driverId,
     }));
-    // Update Vehicle state
-    if (prof.vehicle) {
+    // Update Vehicle state from API
+    const vehicleObj =
+      prof.vehicle ||
+      prof.assignedVehicle ||
+      prof.vehicleDetails ||
+      prof.assigned_vehicle;
+
+    if (vehicleObj && typeof vehicleObj === 'object') {
       setVehicle((prev) => ({
         ...prev,
-        ...prof.vehicle,
+        ...vehicleObj,
+        make: vehicleObj.make || vehicleObj.brand || prev.make || '',
+        model: vehicleObj.model || prev.model || '',
+        variant: vehicleObj.variant || prev.variant || '',
+        year: vehicleObj.year || prev.year || new Date().getFullYear(),
+        plateNumber: vehicleObj.plateNumber || vehicleObj.plate_number || vehicleObj.licensePlate || prev.plateNumber || '',
+        fleetNumber: vehicleObj.fleetNumber || vehicleObj.fleet_number || prev.fleetNumber || '',
+        vin: vehicleObj.vin || vehicleObj.chassisNumber || prev.vin || '',
+        engineNumber: vehicleObj.engineNumber || vehicleObj.engine_number || prev.engineNumber || '',
+        fuelType: vehicleObj.fuelType || vehicleObj.fuel_type || prev.fuelType || '',
+        transmission: vehicleObj.transmission || prev.transmission || '',
+        colour: vehicleObj.colour || vehicleObj.color || prev.colour || '',
+        seats: vehicleObj.seats ?? prev.seats ?? 0,
+        category: vehicleObj.category || prev.category || '',
+        currentMileage: vehicleObj.currentMileage || vehicleObj.current_mileage || prev.currentMileage || 0,
+        nextService: vehicleObj.nextService || vehicleObj.next_service || prev.nextService || 0,
+        status: vehicleObj.status || prev.status || 'Active',
+        branch: vehicleObj.branch || prof.branch || prev.branch || '',
+        documents: vehicleObj.documents || prev.documents || [],
       }));
     }
-    // Update Financial state
-    if (prof.financial) {
+    // Update Financial state from API
+    if (prof.financial || prof.statementSummary || prof.billing) {
+      const fin = prof.financial || prof.statementSummary || prof.billing;
       setFinancial((prev) => ({
         ...prev,
-        ...prof.financial,
+        ...fin,
       }));
     }
   };
@@ -181,26 +207,60 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         : availableProfiles[0];
       applyProfile(primary);
     } else if (driverData) {
-      setDriver((prev) => {
-        const fullName = driverData.name || driverData.personalInfo?.fullName || prev.name;
-        const parts = fullName.split(' ');
-        const firstName = parts[0] || prev.firstName;
-        const lastName = parts.slice(1).join(' ') || prev.lastName;
-        return {
+      const fullName = driverData.name || driverData.personalInfo?.fullName || '';
+      const parts = fullName.split(' ');
+      const firstName = driverData.firstName || parts[0] || '';
+      const lastName = driverData.lastName || parts.slice(1).join(' ') || '';
+
+      setDriver((prev) => ({
+        ...prev,
+        email: driverData.email || driverData.personalInfo?.email || email,
+        name: fullName,
+        firstName,
+        lastName,
+        phone: driverData.phone || driverData.personalInfo?.phone || '',
+        driverId: driverData.customerId || driverData.driverCode || String(driverData._id || ''),
+        verified: Boolean(driverData.verified ?? true),
+        address: driverData.address || driverData.personalInfo?.address || '',
+        emergencyContact: driverData.emergencyContact || driverData.personalInfo?.emergencyContact || '',
+        avatarUrl: driverData.avatarUrl || driverData.avatar || '',
+      }));
+
+      // Map assigned vehicle from API response
+      const vehicleObj =
+        driverData.vehicle ||
+        driverData.assignedVehicle ||
+        driverData.vehicleDetails ||
+        driverData.assigned_vehicle;
+
+      if (vehicleObj && typeof vehicleObj === 'object') {
+        setVehicle((prev) => ({
           ...prev,
-          email: driverData.email || driverData.personalInfo?.email || email,
-          name: fullName,
-          firstName,
-          lastName,
-          phone: driverData.phone || driverData.personalInfo?.phone || prev.phone,
-          driverId: driverData.customerId || driverData.driverCode || String(driverData._id || prev.driverId),
-        };
-      });
-      if (driverData.vehicle) {
-        setVehicle((prev) => ({ ...prev, ...driverData.vehicle }));
+          ...vehicleObj,
+          make: vehicleObj.make || vehicleObj.brand || prev.make || '',
+          model: vehicleObj.model || prev.model || '',
+          variant: vehicleObj.variant || prev.variant || '',
+          year: vehicleObj.year || prev.year || new Date().getFullYear(),
+          plateNumber: vehicleObj.plateNumber || vehicleObj.plate_number || vehicleObj.licensePlate || prev.plateNumber || '',
+          fleetNumber: vehicleObj.fleetNumber || vehicleObj.fleet_number || prev.fleetNumber || '',
+          vin: vehicleObj.vin || vehicleObj.chassisNumber || prev.vin || '',
+          engineNumber: vehicleObj.engineNumber || vehicleObj.engine_number || prev.engineNumber || '',
+          fuelType: vehicleObj.fuelType || vehicleObj.fuel_type || prev.fuelType || '',
+          transmission: vehicleObj.transmission || prev.transmission || '',
+          colour: vehicleObj.colour || vehicleObj.color || prev.colour || '',
+          seats: vehicleObj.seats ?? prev.seats ?? 0,
+          category: vehicleObj.category || prev.category || '',
+          currentMileage: vehicleObj.currentMileage || vehicleObj.current_mileage || prev.currentMileage || 0,
+          nextService: vehicleObj.nextService || vehicleObj.next_service || prev.nextService || 0,
+          status: vehicleObj.status || prev.status || 'Active',
+          branch: vehicleObj.branch || prev.branch || '',
+          documents: vehicleObj.documents || prev.documents || [],
+        }));
       }
-      if (driverData.financial) {
-        setFinancial((prev) => ({ ...prev, ...driverData.financial }));
+
+      if (driverData.financial || driverData.statementSummary || driverData.billing) {
+        const fin = driverData.financial || driverData.statementSummary || driverData.billing;
+        setFinancial((prev) => ({ ...prev, ...fin }));
       }
     } else if (email) {
       setDriver((prev) => ({ ...prev, email }));
@@ -213,7 +273,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logout = () => {
     setIsAuthenticated(false);
     setIsDrawerOpen(false);
-    setScreenStack(['Splash']);
+    setDriver(INITIAL_DRIVER);
+    setVehicle(INITIAL_VEHICLE);
+    setFinancial(INITIAL_FINANCIAL);
+    setActivities(INITIAL_ACTIVITIES);
+    setNotifications(INITIAL_NOTIFICATIONS);
+    setProfiles([]);
+    setActiveProfile(null);
+    setScreenStack(['Login']);
     showToast('Logged out successfully');
   };
 

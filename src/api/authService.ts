@@ -75,58 +75,8 @@ export const fetchCustomerStatement = async (
     );
     return response.data;
   } catch (err: any) {
-    console.warn('[authService.fetchCustomerStatement] Backend call failed, using fallback:', err.message);
-    return {
-      success: true,
-      summary: {
-        pendingAmount: 240.0,
-        nextDueDate: 'Friday, Oct 3',
-        totalInvoiced: 480.0,
-        totalPaid: 240.0,
-        closingBalance: 240.0,
-        breakdown: {
-          baseRental: 200.0,
-          insurance: 25.0,
-          serviceFee: 15.0,
-        },
-        pendingInvoices: [
-          {
-            id: 'inv_fb_1',
-            invoiceNumber: 'INV-2026-0042',
-            description: 'Weekly Rental Charge',
-            totalAmount: 240.0,
-            amountPaid: 0,
-            remaining: 240.0,
-            dueDate: new Date().toISOString(),
-            status: 'PENDING',
-          },
-        ],
-      },
-      statement: [
-        {
-          id: 'fb_1',
-          date: new Date().toISOString(),
-          type: 'Invoice',
-          refNumber: 'INV-2026-0042',
-          description: 'Weekly Rental Charge: Week 39',
-          debit: 240.0,
-          credit: 0,
-          runningBalance: 240.0,
-          status: 'PENDING',
-        },
-        {
-          id: 'fb_2',
-          date: new Date(Date.now() - 7 * 86400000).toISOString(),
-          type: 'Payment',
-          refNumber: 'REC-2026-0038',
-          description: 'Payment via Card (Stripe)',
-          debit: 0,
-          credit: 240.0,
-          runningBalance: 0,
-          status: 'COMPLETED',
-        },
-      ],
-    };
+    console.warn('[authService.fetchCustomerStatement] Backend call failed:', err.message);
+    throw err;
   }
 };
 

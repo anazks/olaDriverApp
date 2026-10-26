@@ -130,7 +130,7 @@ export const LoginScreen: React.FC = () => {
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Email ID</Text>
             <AuthInput
-              placeholder="e.g. carlos@example.com"
+              placeholder="e.g. driver@olacars.com"
               value={email}
               onChangeText={(txt) => {
                 setEmail(txt);
